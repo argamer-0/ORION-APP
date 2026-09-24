@@ -1,9 +1,10 @@
 package com.orion.assistant
 
+import android.animation.ValueAnimator
 import android.app.Service
+import android.content.Context
 import android.content.Intent
-import android.graphics.Color
-import android.graphics.PixelFormat
+import android.graphics.*
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.IBinder
@@ -11,13 +12,16 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
-import android.widget.ImageView
+import android.view.animation.LinearInterpolator
+import android.widget.FrameLayout
+import android.widget.TextView
 import android.widget.Toast
 
 class FloatingBubbleService : Service() {
 
     private var windowManager: WindowManager? = null
-    private var floatingBubble: View? = null
+    private var edgeOverlay: View? = null
+    private var orbOverlay: View? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -25,28 +29,53 @@ class FloatingBubbleService : Service() {
         super.onCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
-        val orbShape = GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            setColor(Color.parseColor("#050811"))
-            setStroke(6, Color.parseColor("#00E676"))
-        }
-
-        val bubbleView = ImageView(this).apply {
-            setImageResource(android.R.drawable.ic_btn_speak_now)
-            setColorFilter(Color.parseColor("#00E5FF"))
-            background = orbShape
-            setPadding(35, 35, 35, 35)
-        }
-        floatingBubble = bubbleView
-
-        val layoutFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val overlayType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
         } else {
             WindowManager.LayoutParams.TYPE_PHONE
         }
 
-        val params = WindowManager.LayoutParams(
-            170, 170, layoutFlag,
+        // Full Screen 4-Corner Moving RGB Light when Minimized
+        edgeOverlay = BackgroundEdgeView(this)
+        val edgeParams = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            overlayType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        )
+        windowManager?.addView(edgeOverlay, edgeParams)
+
+        // Glassmorphic / Invisible Semi-Transparent Center Floating Orb
+        val glassOrb = FrameLayout(this).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.parseColor("#80060913")) // Invisible Semi-Transparent Glass
+                setStroke(4, Color.parseColor("#00E5FF"))
+            }
+            setPadding(15, 15, 15, 15)
+        }
+
+        val tvOrb = TextView(this).apply {
+            text = "O.R.I.O.N"
+            setTextColor(Color.parseColor("#00E676"))
+            textSize = 10f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+        }
+        glassOrb.addView(tvOrb, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            Gravity.CENTER
+        ))
+
+        orbOverlay = glassOrb
+
+        val orbParams = WindowManager.LayoutParams(
+            170, 170,
+            overlayType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
@@ -55,40 +84,40 @@ class FloatingBubbleService : Service() {
             y = 350
         }
 
-        bubbleView.setOnTouchListener(object : View.OnTouchListener {
-            private var initialX = 0
-            private var initialY = 0
-            private var initialTouchX = 0f
-            private var initialTouchY = 0f
-            private var touchStartTime = 0L
+        glassOrb.setOnTouchListener(object : View.OnTouchListener {
+            private var initX = 0
+            private var initY = 0
+            private var touchX = 0f
+            private var touchY = 0f
+            private var startTime = 0L
 
             override fun onTouch(v: View?, event: MotionEvent): Boolean {
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> {
-                        initialX = params.x
-                        initialY = params.y
-                        initialTouchX = event.rawX
-                        initialTouchY = event.rawY
-                        touchStartTime = System.currentTimeMillis()
+                        initX = orbParams.x
+                        initY = orbParams.y
+                        touchX = event.rawX
+                        touchY = event.rawY
+                        startTime = System.currentTimeMillis()
                         return true
                     }
                     MotionEvent.ACTION_MOVE -> {
-                        params.x = initialX + (event.rawX - initialTouchX).toInt()
-                        params.y = initialY + (event.rawY - initialTouchY).toInt()
-                        windowManager?.updateViewLayout(floatingBubble, params)
+                        orbParams.x = initX + (event.rawX - touchX).toInt()
+                        orbParams.y = initY + (event.rawY - touchY).toInt()
+                        windowManager?.updateViewLayout(orbOverlay, orbParams)
                         return true
                     }
                     MotionEvent.ACTION_UP -> {
-                        val duration = System.currentTimeMillis() - touchStartTime
-                        val diffX = Math.abs(event.rawX - initialTouchX)
-                        val diffY = Math.abs(event.rawY - initialTouchY)
+                        val duration = System.currentTimeMillis() - startTime
+                        val dX = Math.abs(event.rawX - touchX)
+                        val dY = Math.abs(event.rawY - touchY)
 
-                        if (diffX < 20 && diffY < 20) {
-                            if (duration > 1200) {
-                                Toast.makeText(this@FloatingBubbleService, "ORION Orb Terminated", Toast.LENGTH_SHORT).show()
+                        if (dX < 15 && dY < 15) {
+                            if (duration > 1500) {
+                                Toast.makeText(this@FloatingBubbleService, "ORION Background Service Band", Toast.LENGTH_SHORT).show()
                                 stopSelf()
                             } else {
-                                Toast.makeText(this@FloatingBubbleService, "ORION Listening...", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(this@FloatingBubbleService, "ORION Standby Listening...", Toast.LENGTH_SHORT).show()
                             }
                         }
                         return true
@@ -98,14 +127,61 @@ class FloatingBubbleService : Service() {
             }
         })
 
-        windowManager?.addView(floatingBubble, params)
+        windowManager?.addView(orbOverlay, orbParams)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        if (floatingBubble != null) {
-            windowManager?.removeView(floatingBubble)
-            floatingBubble = null
+        if (edgeOverlay != null) {
+            windowManager?.removeView(edgeOverlay)
+            edgeOverlay = null
+        }
+        if (orbOverlay != null) {
+            windowManager?.removeView(orbOverlay)
+            orbOverlay = null
+        }
+    }
+
+    class BackgroundEdgeView(context: Context) : View(context) {
+        private var rot = 0f
+        private val edgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 10f
+        }
+
+        init {
+            ValueAnimator.ofFloat(0f, 360f).apply {
+                duration = 4500
+                repeatCount = ValueAnimator.INFINITE
+                interpolator = LinearInterpolator()
+                addUpdateListener {
+                    rot = it.animatedValue as Float
+                    invalidate()
+                }
+                start()
+            }
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            val shader = SweepGradient(
+                width / 2f, height / 2f,
+                intArrayOf(
+                    Color.parseColor("#00E5FF"),
+                    Color.parseColor("#E91E63"),
+                    Color.parseColor("#FF1744"),
+                    Color.parseColor("#00E676"),
+                    Color.parseColor("#00E5FF")
+                ),
+                null
+            )
+            val m = Matrix()
+            m.setRotate(rot, width / 2f, height / 2f)
+            shader.setLocalMatrix(m)
+            edgePaint.shader = shader
+
+            val rect = RectF(6f, 6f, width - 6f, height - 6f)
+            canvas.drawRoundRect(rect, 40f, 40f, edgePaint)
         }
     }
 }
