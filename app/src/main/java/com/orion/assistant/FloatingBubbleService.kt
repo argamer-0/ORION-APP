@@ -2,7 +2,9 @@ package com.orion.assistant
 
 import android.app.Service
 import android.content.Intent
+import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.IBinder
 import android.view.Gravity
@@ -22,10 +24,18 @@ class FloatingBubbleService : Service() {
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+
+        val orbShape = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(Color.parseColor("#050811"))
+            setStroke(6, Color.parseColor("#00E676"))
+        }
+
         val bubbleView = ImageView(this).apply {
             setImageResource(android.R.drawable.ic_btn_speak_now)
-            setBackgroundColor(0xFF1E88E5.toInt())
-            setPadding(25, 25, 25, 25)
+            setColorFilter(Color.parseColor("#00E5FF"))
+            background = orbShape
+            setPadding(35, 35, 35, 35)
         }
         floatingBubble = bubbleView
 
@@ -36,13 +46,13 @@ class FloatingBubbleService : Service() {
         }
 
         val params = WindowManager.LayoutParams(
-            160, 160, layoutFlag,
+            170, 170, layoutFlag,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 100
-            y = 200
+            x = 80
+            y = 350
         }
 
         bubbleView.setOnTouchListener(object : View.OnTouchListener {
@@ -50,6 +60,7 @@ class FloatingBubbleService : Service() {
             private var initialY = 0
             private var initialTouchX = 0f
             private var initialTouchY = 0f
+            private var touchStartTime = 0L
 
             override fun onTouch(v: View?, event: MotionEvent): Boolean {
                 when (event.action) {
@@ -58,6 +69,7 @@ class FloatingBubbleService : Service() {
                         initialY = params.y
                         initialTouchX = event.rawX
                         initialTouchY = event.rawY
+                        touchStartTime = System.currentTimeMillis()
                         return true
                     }
                     MotionEvent.ACTION_MOVE -> {
@@ -67,10 +79,17 @@ class FloatingBubbleService : Service() {
                         return true
                     }
                     MotionEvent.ACTION_UP -> {
+                        val duration = System.currentTimeMillis() - touchStartTime
                         val diffX = Math.abs(event.rawX - initialTouchX)
                         val diffY = Math.abs(event.rawY - initialTouchY)
-                        if (diffX < 10 && diffY < 10) {
-                            Toast.makeText(this@FloatingBubbleService, "ORION Sun Raha Hai Ankit Bhai!", Toast.LENGTH_SHORT).show()
+
+                        if (diffX < 20 && diffY < 20) {
+                            if (duration > 1200) {
+                                Toast.makeText(this@FloatingBubbleService, "ORION Orb Terminated", Toast.LENGTH_SHORT).show()
+                                stopSelf()
+                            } else {
+                                Toast.makeText(this@FloatingBubbleService, "ORION Listening...", Toast.LENGTH_SHORT).show()
+                            }
                         }
                         return true
                     }
@@ -86,6 +105,7 @@ class FloatingBubbleService : Service() {
         super.onDestroy()
         if (floatingBubble != null) {
             windowManager?.removeView(floatingBubble)
+            floatingBubble = null
         }
     }
 }
