@@ -41,31 +41,27 @@ class OrionEngine(
             override fun onStart(utteranceId: String?) {}
             override fun onDone(utteranceId: String?) {
                 if (isContinuousMode) {
-                    mainHandler.postDelayed({ startListening() }, 400)
+                    mainHandler.postDelayed({ startListening() }, 500)
                 }
             }
             override fun onError(utteranceId: String?) {
                 if (isContinuousMode) {
-                    mainHandler.postDelayed({ startListening() }, 600)
+                    mainHandler.postDelayed({ startListening() }, 800)
                 }
             }
         })
-        setupRecognizer()
+        initRecognizer()
     }
 
-    private fun setupRecognizer() {
+    private fun initRecognizer() {
         mainHandler.post {
             try {
                 speechRecognizer?.destroy()
-                if (SpeechRecognizer.isRecognitionAvailable(context)) {
-                    speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
-                        setRecognitionListener(this@OrionEngine)
-                    }
-                } else {
-                    onStatus("Speech recognition service unavailable")
+                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
+                    setRecognitionListener(this@OrionEngine)
                 }
             } catch (e: Exception) {
-                onStatus("STT init error: ${e.message}")
+                onStatus("STT Init Error: ${e.message}")
             }
         }
     }
@@ -73,15 +69,19 @@ class OrionEngine(
     fun startListening() {
         mainHandler.post {
             try {
+                if (speechRecognizer == null) {
+                    initRecognizer()
+                }
                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN")
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                    putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
                 }
                 speechRecognizer?.startListening(intent)
-                onStatus("Listening...")
+                onStatus("LISTENING (MIC ACTIVE)...")
             } catch (e: Exception) {
-                onStatus("Mic error: ${e.message}")
+                onStatus("Mic Error: ${e.message}")
             }
         }
     }
@@ -92,7 +92,7 @@ class OrionEngine(
             try {
                 speechRecognizer?.stopListening()
                 tts?.stop()
-                onStatus("Idle")
+                onStatus("STANDBY")
             } catch (_: Exception) {}
         }
     }
@@ -102,7 +102,7 @@ class OrionEngine(
         val text = matches?.firstOrNull()?.trim() ?: ""
         if (text.isNotEmpty()) {
             onMessage(text, true)
-            onStatus("Processing...")
+            onStatus("THINKING...")
             queryAI(text)
         } else if (isContinuousMode) {
             startListening()
@@ -125,9 +125,9 @@ class OrionEngine(
 
             if (answer.isEmpty()) {
                 answer = if (groqKey.isEmpty() && geminiKey.isEmpty()) {
-                    "Boss, Groq ya Gemini API key enter karein."
+                    "Boss, screen par diye KEYS button se Groq ya Gemini API key save karein."
                 } else {
-                    "Servers se connect nahi ho pa raha hai, please key check karein."
+                    "Server connect nahi ho pa raha hai, please check internet ya API key."
                 }
             }
 
@@ -145,7 +145,7 @@ class OrionEngine(
                 put("messages", JSONArray().apply {
                     put(JSONObject().apply {
                         put("role", "system")
-                        put("content", "You are ORION, an intelligent cybernetic companion created for Ankit. Answer fast and naturally in clean Hindi/Hinglish.")
+                        put("content", "You are ORION, an ultra-advanced AI built for Ankit. Respond concisely and naturally in clear Hindi/Hinglish.")
                     })
                     put(JSONObject().apply {
                         put("role", "user")
@@ -192,7 +192,7 @@ class OrionEngine(
     }
 
     fun speak(text: String) {
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "OrionTTS_${System.currentTimeMillis()}")
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "Orion_${System.currentTimeMillis()}")
     }
 
     override fun onInit(status: Int) {
@@ -203,7 +203,7 @@ class OrionEngine(
 
     override fun onError(error: Int) {
         if (isContinuousMode) {
-            mainHandler.postDelayed({ startListening() }, 800)
+            mainHandler.postDelayed({ startListening() }, 1000)
         }
     }
 

@@ -26,7 +26,7 @@ class OrionArcOrbView(context: Context) : View(context) {
     }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        textSize = 45f
+        textSize = 42f
         textAlign = Paint.Align.CENTER
         isFakeBoldText = true
     }
