@@ -19,10 +19,23 @@ import android.view.Gravity
 import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.*
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import android.speech.tts.TextToSpeech
+import java.net.HttpURLConnection
+import java.net.URL
+import java.io.OutputStreamWriter
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import org.json.JSONObject
+import org.json.JSONArray
+import java.util.Locale
+import kotlin.concurrent.thread
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
-class MainActivity : Activity() {
+class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private lateinit var tvBattery: TextView
     private lateinit var tvSecurity: TextView
@@ -235,6 +248,125 @@ class MainActivity : Activity() {
         scrollContainer.addView(contentLayout)
         rootLayout.addView(scrollContainer)
         setContentView(rootLayout)
+    }
+
+    
+    private fun initSpeechEngine() {
+        if (SpeechRecognizer.isRecognitionAvailable(this)) {
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
+                setRecognitionListener(object : RecognitionListener {
+                    override fun onReadyForSpeech(p: Bundle?) { tvStatus.text = "LISTENING NOW..." }
+                    override fun onBeginningOfSpeech() {}
+                    override fun onRmsChanged(r: Float) {}
+                    override fun onBufferReceived(b: ByteArray?) {}
+                    override fun onEndOfSpeech() { tvStatus.text = "PROCESSING..." }
+                    override fun onError(e: Int) { tvStatus.text = "TAP ORB TO SPEAK" }
+                    override fun onResults(results: Bundle?) {
+                        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        if (!matches.isNullOrEmpty()) {
+                            val userText = matches[0]
+                            tvStatus.text = "YOU: " + userText
+                            queryGroqAi(userText)
+                        } else {
+                            tvStatus.text = "TAP ORB TO SPEAK"
+                        }
+                    }
+                    override fun onPartialResults(p: Bundle?) {}
+                    override fun onEvent(t: Int, p: Bundle?) {}
+                })
+            }
+        }
+    }
+
+    private fun startListening() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 101)
+            return
+        }
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN")
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "ORION Listening...")
+        }
+        speechRecognizer?.startListening(intent)
+    }
+
+    private fun queryGroqAi(userPrompt: String) {
+        val prefs = getSharedPreferences("orion_config", Context.MODE_PRIVATE)
+        val apiKey = prefs.getString("groq_key", "") ?: ""
+
+        if (apiKey.isEmpty()) {
+            speak("Boss, Profile tab mein jaakar Groq API Key save karein.")
+            tvStatus.text = "Groq Key Required in Profile"
+            return
+        }
+
+        thread {
+            try {
+                val url = URL("https://api.groq.com/openai/v1/chat/completions")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Authorization", "Bearer " + apiKey)
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.doOutput = true
+                conn.connectTimeout = 8000
+                conn.readTimeout = 12000
+
+                val json = JSONObject().apply {
+                    put("model", "llama-3.3-70b-versatile")
+                    put("messages", JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("role", "system")
+                            put("content", "You are ORION, a loyal and ultra-smart AI assistant for Ankit. Answer in short Hinglish.")
+                        })
+                        put(JSONObject().apply {
+                            put("role", "user")
+                            put("content", userPrompt)
+                        })
+                    })
+                }
+
+                val wr = OutputStreamWriter(conn.outputStream)
+                wr.write(json.toString())
+                wr.flush()
+
+                val reader = BufferedReader(InputStreamReader(conn.inputStream))
+                val resp = reader.readText()
+                reader.close()
+
+                val reply = JSONObject(resp).getJSONArray("choices")
+                    .getJSONObject(0)
+                    .getJSONObject("message")
+                    .getString("content")
+
+                runOnUiThread {
+                    tvStatus.text = "ORION: " + reply
+                    speak(reply)
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    tvStatus.text = "Groq Error or Invalid Key"
+                    speak("Network error ya invalid key hai Boss.")
+                }
+            }
+        }
+    }
+
+    private fun speak(text: String) {
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "orion_tts")
+    }
+
+    override fun onInit(status: Int) {
+        if (status == TextToSpeech.SUCCESS) {
+            tts?.language = Locale("hi", "IN")
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        speechRecognizer?.destroy()
+        tts?.stop()
+        tts?.shutdown()
     }
 
     override fun onResume() {
