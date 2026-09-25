@@ -33,7 +33,6 @@ class MainActivity : Activity() {
             setBackgroundColor(Color.parseColor("#050811"))
         }
 
-        // RGB Border Sweep View
         val borderView = OrionBorderSweepView(this)
         root.addView(borderView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
@@ -46,10 +45,9 @@ class MainActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT)
         }
 
-        // --- TOP NAVIGATION BAR ---
         val topBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(30, 40, 30, 20)
+            setPadding(30, 45, 30, 20)
             gravity = Gravity.CENTER_VERTICAL
             setBackgroundColor(Color.parseColor("#0B1120"))
         }
@@ -57,7 +55,7 @@ class MainActivity : Activity() {
         val btnMenu = TextView(this).apply {
             text = "☰"
             setTextColor(Color.parseColor("#00E5FF"))
-            textSize = 26f
+            textSize = 28f
             typeface = Typeface.DEFAULT_BOLD
             setPadding(10, 0, 30, 0)
             setOnClickListener { toggleDrawer() }
@@ -65,7 +63,7 @@ class MainActivity : Activity() {
         topBar.addView(btnMenu)
 
         val tvTitle = TextView(this).apply {
-            text = "ORION SENTINEL // AI"
+            text = "ORION // SYSTEM V1"
             setTextColor(Color.WHITE)
             textSize = 16f
             typeface = Typeface.DEFAULT_BOLD
@@ -80,8 +78,8 @@ class MainActivity : Activity() {
             typeface = Typeface.DEFAULT_BOLD
             setPadding(20, 10, 20, 10)
             background = GradientDrawable().apply {
-                cornerRadius = 15f
-                setColor(Color.parseColor("#152238"))
+                cornerRadius = 14f
+                setColor(Color.parseColor("#142236"))
                 setStroke(2, Color.parseColor("#76FF03"))
             }
             setOnClickListener { showDualKeyDialog() }
@@ -89,12 +87,9 @@ class MainActivity : Activity() {
         topBar.addView(btnKeyConfig)
         baseLinear.addView(topBar)
 
-        // --- CONTENT AREA (HOME & CHAT) ---
         val viewPagerArea = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
         }
-
-        // 1. HOME TAB
         homeLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
@@ -116,20 +111,17 @@ class MainActivity : Activity() {
             val size = (220 * resources.displayMetrics.density).toInt()
             layoutParams = LinearLayout.LayoutParams(size, size).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
-                setMargins(0, 20, 0, 30)
+                setMargins(0, 10, 0, 25)
             }
             isClickable = true
             setOnClickListener {
                 if (ContextCompat.checkSelfPermission(this@MainActivity, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                     if (engine?.isContinuousMode == true) {
                         engine?.stopListening()
-                        tvStatus.text = "STATUS: STANDBY (TAP TO TALK)"
-                        Toast.makeText(this@MainActivity, "Voice mode paused", Toast.LENGTH_SHORT).show()
+                        tvStatus.text = "STATUS: STANDBY"
                     } else {
                         engine?.isContinuousMode = true
                         engine?.startListening()
-                        tvStatus.text = "STATUS: CONTINUOUS LIVE LISTENING..."
-                        Toast.makeText(this@MainActivity, "Continuous listening ON", Toast.LENGTH_SHORT).show()
                     }
                 } else {
                     ActivityCompat.requestPermissions(this@MainActivity, arrayOf(android.Manifest.permission.RECORD_AUDIO), 101)
@@ -139,12 +131,12 @@ class MainActivity : Activity() {
         homeLayout.addView(orb)
 
         val btnFloat = Button(this).apply {
-            text = "🚀 LAUNCH FLOATING ORION"
+            text = "🚀 LAUNCH FLOATING ORB"
             setTextColor(Color.BLACK)
             textSize = 14f
             typeface = Typeface.DEFAULT_BOLD
             background = GradientDrawable().apply {
-                cornerRadius = 20f
+                cornerRadius = 18f
                 setColor(Color.parseColor("#00E5FF"))
             }
             val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
@@ -157,7 +149,6 @@ class MainActivity : Activity() {
         homeLayout.addView(btnFloat)
         viewPagerArea.addView(homeLayout)
 
-        // 2. CHAT TAB
         chatLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             visibility = View.GONE
@@ -180,10 +171,9 @@ class MainActivity : Activity() {
 
         baseLinear.addView(viewPagerArea)
 
-        // --- BOTTOM TAB BAR ---
         val bottomBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(20, 20, 20, 20)
+            setPadding(20, 18, 20, 18)
             setBackgroundColor(Color.parseColor("#0B1120"))
         }
 
@@ -214,8 +204,6 @@ class MainActivity : Activity() {
 
         mainContent.addView(baseLinear)
         root.addView(mainContent)
-
-        // --- DRAWER SLIDE PANEL (Three-line Menu) ---
         drawerLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.parseColor("#0A0F1D"))
@@ -234,15 +222,15 @@ class MainActivity : Activity() {
         }
 
         val tvDrawerHead = TextView(this).apply {
-            text = "ORION SYSTEM PERMISSIONS"
+            text = "ORION PERMISSION PANEL"
             setTextColor(Color.parseColor("#00E5FF"))
             textSize = 16f
             typeface = Typeface.DEFAULT_BOLD
-            setPadding(0, 0, 0, 30)
+            setPadding(0, 0, 0, 25)
         }
         drawerContent.addView(tvDrawerHead)
 
-        addPermissionItem(drawerContent, "Microphone (RECORD_AUDIO)", "Voice STT loop & continuous engine") {
+        addPermissionItem(drawerContent, "Microphone (RECORD_AUDIO)", "Wake-word continuous listening & STT loop") {
             ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.RECORD_AUDIO), 101)
         }
         addPermissionItem(drawerContent, "Camera (CAMERA)", "Intruder security vision capture") {
@@ -268,7 +256,7 @@ class MainActivity : Activity() {
                 setColor(Color.parseColor("#D50000"))
             }
             val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            lp.setMargins(0, 40, 0, 20)
+            lp.setMargins(0, 30, 0, 20)
             layoutParams = lp
             setOnClickListener {
                 stopService(Intent(this@MainActivity, FloatingBubbleService::class.java))
@@ -284,7 +272,6 @@ class MainActivity : Activity() {
 
         setContentView(root)
 
-        // Init Engine
         engine = OrionEngine(
             this,
             onStatus = { status ->
@@ -294,6 +281,10 @@ class MainActivity : Activity() {
                 runOnUiThread { addChatMessage(msg, isUser) }
             }
         )
+
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.RECORD_AUDIO), 101)
+        }
     }
 
     private fun toggleDrawer() {
