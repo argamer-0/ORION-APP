@@ -4,31 +4,33 @@ import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
-import android.graphics.SweepGradient
+import android.graphics.Shader
 import android.view.View
 import android.view.animation.LinearInterpolator
 
 class OrionBorderSweepView(context: Context) : View(context) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = 10f
+        strokeWidth = 14f
     }
-    private var angle = 0f
+    private var offset = 0f
     private val colors = intArrayOf(
         Color.parseColor("#00E5FF"),
         Color.parseColor("#76FF03"),
+        Color.parseColor("#FF0055"),
         Color.parseColor("#D500F9"),
         Color.parseColor("#00E5FF")
     )
 
     init {
-        ValueAnimator.ofFloat(0f, 360f).apply {
-            duration = 4000
+        ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 3500
             repeatCount = ValueAnimator.INFINITE
             interpolator = LinearInterpolator()
             addUpdateListener {
-                angle = it.animatedValue as Float
+                offset = it.animatedValue as Float
                 invalidate()
             }
             start()
@@ -41,10 +43,12 @@ class OrionBorderSweepView(context: Context) : View(context) {
         val h = height.toFloat()
         if (w <= 0 || h <= 0) return
 
-        canvas.save()
-        canvas.rotate(angle, w / 2f, h / 2f)
-        paint.shader = SweepGradient(w / 2f, h / 2f, colors, null)
-        canvas.drawRect(5f, 5f, w - 5f, h - 5f, paint)
-        canvas.restore()
+        val shader = LinearGradient(
+            0f, offset * h,
+            w, (1f - offset) * h,
+            colors, null, Shader.TileMode.MIRROR
+        )
+        paint.shader = shader
+        canvas.drawRect(7f, 7f, w - 7f, h - 7f, paint)
     }
 }

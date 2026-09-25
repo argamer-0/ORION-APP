@@ -8,7 +8,10 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.widget.*
@@ -108,7 +111,7 @@ class MainActivity : Activity() {
         homeLayout.addView(tvStatus)
 
         val orb = OrionArcOrbView(this).apply {
-            val size = (220 * resources.displayMetrics.density).toInt()
+            val size = (230 * resources.displayMetrics.density).toInt()
             layoutParams = LinearLayout.LayoutParams(size, size).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
                 setMargins(0, 10, 0, 25)
@@ -143,7 +146,11 @@ class MainActivity : Activity() {
             lp.setMargins(0, 10, 0, 10)
             layoutParams = lp
             setOnClickListener {
-                startService(Intent(this@MainActivity, FloatingBubbleService::class.java))
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this@MainActivity)) {
+                    startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+                } else {
+                    startService(Intent(this@MainActivity, FloatingBubbleService::class.java))
+                }
             }
         }
         homeLayout.addView(btnFloat)
@@ -209,7 +216,7 @@ class MainActivity : Activity() {
             setBackgroundColor(Color.parseColor("#0A0F1D"))
             setPadding(40, 60, 40, 40)
             visibility = View.GONE
-            layoutParams = FrameLayout.LayoutParams((resources.displayMetrics.widthPixels * 0.85).toInt(), FrameLayout.LayoutParams.MATCH_PARENT)
+            layoutParams = FrameLayout.LayoutParams((resources.displayMetrics.widthPixels * 0.90).toInt(), FrameLayout.LayoutParams.MATCH_PARENT)
         }
 
         val drawerScroll = ScrollView(this).apply {
@@ -222,7 +229,7 @@ class MainActivity : Activity() {
         }
 
         val tvDrawerHead = TextView(this).apply {
-            text = "ORION PERMISSION PANEL"
+            text = "ORION SYSTEM PERMISSIONS (16+)"
             setTextColor(Color.parseColor("#00E5FF"))
             textSize = 16f
             typeface = Typeface.DEFAULT_BOLD
@@ -230,20 +237,64 @@ class MainActivity : Activity() {
         }
         drawerContent.addView(tvDrawerHead)
 
-        addPermissionItem(drawerContent, "Microphone (RECORD_AUDIO)", "Wake-word continuous listening & STT loop") {
+        addPermissionItem(drawerContent, "1. Microphone (RECORD_AUDIO)", "Continuous voice STT & wake loop") {
             ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.RECORD_AUDIO), 101)
         }
-        addPermissionItem(drawerContent, "Camera (CAMERA)", "Intruder security vision capture") {
+        addPermissionItem(drawerContent, "2. Camera (CAMERA)", "Intruder security & environment vision") {
             ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.CAMERA), 102)
         }
-        addPermissionItem(drawerContent, "Phone / Calls (CALL_PHONE)", "Dialer control and call screening") {
-            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.READ_PHONE_STATE, android.Manifest.permission.CALL_PHONE), 103)
+        addPermissionItem(drawerContent, "3. Phone Calls (CALL_PHONE)", "Direct hands-free emergency dialing") {
+            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.CALL_PHONE), 103)
         }
-        addPermissionItem(drawerContent, "SMS / Messages (READ_SMS)", "Scam alert & message detection") {
-            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.READ_SMS, android.Manifest.permission.RECEIVE_SMS), 104)
+        addPermissionItem(drawerContent, "4. Call Logs (READ_CALL_LOG)", "Screen incoming callers & history") {
+            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.READ_CALL_LOG), 104)
         }
-        addPermissionItem(drawerContent, "Location (GPS)", "Real-time navigation and alerts") {
-            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION), 105)
+        addPermissionItem(drawerContent, "5. Phone State (READ_PHONE_STATE)", "Detect incoming & ongoing calls") {
+            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.READ_PHONE_STATE), 105)
+        }
+        addPermissionItem(drawerContent, "6. Read Contacts (READ_CONTACTS)", "Lookup contacts by voice name") {
+            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.READ_CONTACTS), 106)
+        }
+        addPermissionItem(drawerContent, "7. Write Contacts (WRITE_CONTACTS)", "Save new contact numbers on command") {
+            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.WRITE_CONTACTS), 107)
+        }
+        addPermissionItem(drawerContent, "8. Read SMS (READ_SMS)", "Read incoming OTPs & alerts") {
+            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.READ_SMS), 108)
+        }
+        addPermissionItem(drawerContent, "9. Receive SMS (RECEIVE_SMS)", "Instant SMS listener & scam shield") {
+            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.RECEIVE_SMS), 109)
+        }
+        addPermissionItem(drawerContent, "10. Send SMS (SEND_SMS)", "Send quick emergency SOS messages") {
+            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.SEND_SMS), 110)
+        }
+        addPermissionItem(drawerContent, "11. Precise GPS (ACCESS_FINE_LOCATION)", "Exact coordinates for navigation") {
+            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION), 111)
+        }
+        addPermissionItem(drawerContent, "12. Coarse Location (ACCESS_COARSE_LOCATION)", "City & weather accurate tracking") {
+            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.ACCESS_COARSE_LOCATION), 112)
+        }
+        addPermissionItem(drawerContent, "13. Floating Screen Overlay", "Keep floating Orion bubble above apps") {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+            }
+        }
+        addPermissionItem(drawerContent, "14. Notifications (POST_NOTIFICATIONS)", "Status bar controls & live updates") {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 114)
+            }
+        }
+        addPermissionItem(drawerContent, "15. Bluetooth (BLUETOOTH_CONNECT)", "Connect wireless headsets & mic") {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.BLUETOOTH_CONNECT), 115)
+            }
+        }
+        addPermissionItem(drawerContent, "16. Battery Unrestricted", "Prevent Android from killing Orion in background") {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:$packageName")
+                }
+                startActivity(intent)
+            }
         }
 
         val btnKill = Button(this).apply {
@@ -301,7 +352,7 @@ class MainActivity : Activity() {
                 setColor(Color.parseColor("#111A2E"))
             }
             val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            lp.setMargins(0, 0, 0, 20)
+            lp.setMargins(0, 0, 0, 16)
             layoutParams = lp
         }
 
@@ -383,9 +434,11 @@ class MainActivity : Activity() {
             .setTitle("AI Engine Config")
             .setView(layout)
             .setPositiveButton("Save Keys") { _, _ ->
+                val gK = etGroq.text.toString().trim()
+                val gmK = etGemini.text.toString().trim()
                 prefs.edit()
-                    .putString("groq_key", etGroq.text.toString().trim())
-                    .putString("gemini_key", etGemini.text.toString().trim())
+                    .putString("groq_key", gK)
+                    .putString("gemini_key", gmK)
                     .apply()
                 Toast.makeText(this, "API Keys Updated Successfully", Toast.LENGTH_SHORT).show()
                 engine?.speak("Dono API keys save ho gayi hain boss.")

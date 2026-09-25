@@ -107,8 +107,8 @@ class OrionEngine(
     private fun queryAI(prompt: String) {
         Thread {
             val prefs = context.getSharedPreferences("orion_config", Context.MODE_PRIVATE)
-            val groqKey = prefs.getString("groq_key", "") ?: ""
-            val geminiKey = prefs.getString("gemini_key", "") ?: ""
+            val groqKey = prefs.getString("groq_key", "")?.trim() ?: ""
+            val geminiKey = prefs.getString("gemini_key", "")?.trim() ?: ""
 
             var answer = ""
             if (groqKey.isNotEmpty()) {
@@ -120,9 +120,9 @@ class OrionEngine(
 
             if (answer.isEmpty()) {
                 answer = if (groqKey.isEmpty() && geminiKey.isEmpty()) {
-                    "Boss, screen par diye KEYS button se Groq ya Gemini API key save karein."
+                    "Ankit boss, KEYS button par click karke Groq ya Gemini API key paste karein."
                 } else {
-                    "Server connect nahi ho pa raha hai, please check internet ya API key."
+                    "Internet connection ya API key me issue hai boss, please check karein."
                 }
             }
 
@@ -140,6 +140,7 @@ class OrionEngine(
             conn.requestMethod = "POST"
             conn.setRequestProperty("Authorization", "Bearer $key")
             conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            conn.setRequestProperty("User-Agent", "ORION-Android/1.0")
             conn.connectTimeout = 20000
             conn.readTimeout = 20000
             conn.doOutput = true
@@ -149,7 +150,7 @@ class OrionEngine(
                 put("messages", JSONArray().apply {
                     put(JSONObject().apply {
                         put("role", "system")
-                        put("content", "You are ORION, an ultra-advanced AI built for Ankit. Respond concisely and naturally in clear Hindi/Hinglish.")
+                        put("content", "You are ORION, an ultra-advanced male cybernetic AI assistant created for Ankit. Reply directly and naturally in Hindi/Hinglish in a sharp, respectful, robotic style.")
                     })
                     put(JSONObject().apply {
                         put("role", "user")
@@ -158,17 +159,19 @@ class OrionEngine(
                 })
             }
 
-            val writer = OutputStreamWriter(conn.outputStream)
+            val writer = OutputStreamWriter(conn.outputStream, "UTF-8")
             writer.write(json.toString())
             writer.flush()
             writer.close()
 
             if (conn.responseCode == 200) {
-                val reader = BufferedReader(InputStreamReader(conn.inputStream))
+                val reader = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8"))
                 val res = reader.readText()
                 reader.close()
                 JSONObject(res).getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")
-            } else ""
+            } else {
+                ""
+            }
         } catch (_: Exception) { "" }
     }
 
@@ -178,6 +181,7 @@ class OrionEngine(
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            conn.setRequestProperty("User-Agent", "ORION-Android/1.0")
             conn.connectTimeout = 20000
             conn.readTimeout = 20000
             conn.doOutput = true
@@ -192,13 +196,13 @@ class OrionEngine(
                 })
             }
 
-            val writer = OutputStreamWriter(conn.outputStream)
+            val writer = OutputStreamWriter(conn.outputStream, "UTF-8")
             writer.write(json.toString())
             writer.flush()
             writer.close()
 
             if (conn.responseCode == 200) {
-                val reader = BufferedReader(InputStreamReader(conn.inputStream))
+                val reader = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8"))
                 val res = reader.readText()
                 reader.close()
                 JSONObject(res).getJSONArray("candidates").getJSONObject(0).getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text")
@@ -213,6 +217,9 @@ class OrionEngine(
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             tts?.language = Locale("hi", "IN")
+            // Male Heavy Robotic Tone setup
+            tts?.setPitch(0.85f)
+            tts?.setSpeechRate(1.05f)
         }
     }
 
