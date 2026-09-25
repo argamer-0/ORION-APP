@@ -19,10 +19,13 @@ import android.view.Gravity
 import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.*
+import android.app.AlertDialog
+import android.content.Context
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
 class MainActivity : Activity() {
+    private var engine: OrionEngine? = null
 
     private lateinit var tvBattery: TextView
     private lateinit var tvSecurity: TextView
@@ -33,6 +36,27 @@ class MainActivity : Activity() {
 
     // Permission Buttons List
     private val permissionMap = mutableMapOf<String, Button>()
+
+    
+    private fun showGroqKeyDialog() {
+        val input = EditText(this).apply {
+            hint = "gsk_..."
+            setTextColor(Color.WHITE)
+            setText(getSharedPreferences("orion_config", Context.MODE_PRIVATE).getString("groq_key", ""))
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Enter Groq API Key")
+            .setMessage("Save your Groq Llama-3.3 API Key:")
+            .setView(input)
+            .setPositiveButton("Save") { _, _ ->
+                val k = input.text.toString().trim()
+                getSharedPreferences("orion_config", Context.MODE_PRIVATE).edit().putString("groq_key", k).apply()
+                Toast.makeText(this, "API Key Saved Successfully!", Toast.LENGTH_SHORT).show()
+                engine?.speak("API Key save ho gayi hai boss.")
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
