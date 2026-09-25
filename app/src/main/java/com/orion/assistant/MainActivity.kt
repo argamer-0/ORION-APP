@@ -34,30 +34,6 @@ class MainActivity : Activity() {
     // Permission Buttons List
     private val permissionMap = mutableMapOf<String, Button>()
 
-    
-    private fun showKeyDialog() {
-        val prefs = getSharedPreferences("orion_config", Context.MODE_PRIVATE)
-        val input = EditText(this).apply {
-            hint = "gsk_..."
-            setTextColor(Color.WHITE)
-            setText(prefs.getString("groq_key", ""))
-        }
-        AlertDialog.Builder(this)
-            .setTitle("Enter Groq API Key")
-            .setMessage("Llama-3.3 Groq Key Paste Karein:")
-            .setView(input)
-            .setPositiveButton("Save") { _, _ ->
-                val k = input.text.toString().trim()
-                if (k.isNotEmpty()) {
-                    prefs.edit().putString("groq_key", k).apply()
-                    Toast.makeText(this, "Key Saved Successfully!", Toast.LENGTH_SHORT).show()
-                    engine?.speak("API Key save ho gayi hai.")
-                }
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
