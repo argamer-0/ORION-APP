@@ -3,107 +3,127 @@ package com.orion.assistant
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import java.io.OutputStreamWriter
-import java.net.HttpURLConnection
-import java.net.URL
-import java.util.Locale
-import kotlin.concurrent.thread
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.Locale
+import java.util.concurrent.TimeUnit
 
-class OrionEngine(private val context: Context, private val onStatus: (String) -> Unit) : TextToSpeech.OnInitListener {
-    private var recognizer: SpeechRecognizer? = null
-    private var tts: TextToSpeech? = TextToSpeech(context, this)
+class OrionEngine(
+    private val context: Context,
+    private val onStatus: (String) -> Unit
+) : RecognitionListener, TextToSpeech.OnInitListener {
+
+    private var speechRecognizer: SpeechRecognizer? = null
+    private var tts: TextToSpeech? = null
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .build()
 
     init {
-        if (SpeechRecognizer.isRecognitionAvailable(context)) {
-            recognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
-                setRecognitionListener(object : RecognitionListener {
-                    override fun onReadyForSpeech(p: Bundle?) { onStatus("LISTENING NOW...") }
-                    override fun onBeginningOfSpeech() {}
-                    override fun onRmsChanged(r: Float) {}
-                    override fun onBufferReceived(b: ByteArray?) {}
-                    override fun onEndOfSpeech() { onStatus("PROCESSING...") }
-                    override fun onError(e: Int) { onStatus("TAP ORB TO SPEAK") }
-                    override fun onResults(results: Bundle?) {
-                        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        if (!matches.isNullOrEmpty()) {
-                            val text = matches[0]
-                            onStatus("YOU: " + text)
-                            queryAi(text)
-                        } else {
-                            onStatus("TAP ORB TO SPEAK")
-                        }
-                    }
-                    override fun onPartialResults(p: Bundle?) {}
-                    override fun onEvent(t: Int, p: Bundle?) {}
-                })
+        tts = TextToSpeech(context, this)
+        Handler(Looper.getMainLooper()).post {
+            if (SpeechRecognizer.isRecognitionAvailable(context)) {
+                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
+                    setRecognitionListener(this@OrionEngine)
+                }
+            } else {
+                onStatus("Speech Recognition Not Available")
             }
         }
     }
 
     fun startListening() {
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN")
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "ORION Listening...")
-        }
-        recognizer?.startListening(intent)
-    }
-
-    fun queryAi(prompt: String) {
-        val key = context.getSharedPreferences("orion_config", Context.MODE_PRIVATE).getString("groq_key", "") ?: ""
-        if (key.isEmpty()) {
-            speak("Boss, Profile tab me jaakar Groq API Key save karein.")
-            onStatus("Groq Key Required in Profile")
-            return
-        }
-
-        thread {
+        Handler(Looper.getMainLooper()).post {
             try {
-                val conn = (URL("https://api.groq.com/openai/v1/chat/completions").openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    setRequestProperty("Authorization", "Bearer " + key)
-                    setRequestProperty("Content-Type", "application/json")
-                    doOutput = true
-                    connectTimeout = 8000
-                    readTimeout = 12000
+                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN")
+                    putExtra(RecognizerIntent.EXTRA_PROMPT, "Orion is listening...")
                 }
-
-                val body = JSONObject().apply {
-                    put("model", "llama-3.3-70b-versatile")
-                    put("messages", JSONArray().apply {
-                        put(JSONObject().apply {
-                            put("role", "system")
-                            put("content", "You are ORION, assistant to Ankit. Answer in short Hinglish.")
-                        })
-                        put(JSONObject().apply {
-                            put("role", "user")
-                            put("content", prompt)
-                        })
-                    })
-                }
-
-                OutputStreamWriter(conn.outputStream).use { it.write(body.toString()); it.flush() }
-                val resp = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() }
-                val reply = JSONObject(resp).getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")
-                onStatus("ORION: " + reply)
-                speak(reply)
+                speechRecognizer?.startListening(intent)
+                onStatus("Listening...")
             } catch (e: Exception) {
-                onStatus("Groq Connection Error")
-                speak("Network error ya invalid key hai Boss.")
+                onStatus("Mic Error: ${e.message}")
             }
         }
     }
 
-    fun speak(msg: String) {
-        tts?.speak(msg, TextToSpeech.QUEUE_FLUSH, null, "orion_tts")
+    override fun onResults(results: Bundle?) {
+        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+        val text = matches?.firstOrNull() ?: ""
+        if (text.isNotEmpty()) {
+            onStatus("You: $text")
+            queryGroq(text)
+        } else {
+            onStatus("Nothing recognized")
+        }
+    }
+
+    private fun queryGroq(userQuery: String) {
+        Thread {
+            try {
+                val prefs = context.getSharedPreferences("orion_config", Context.MODE_PRIVATE)
+                val apiKey = prefs.getString("groq_key", "") ?: ""
+
+                if (apiKey.isEmpty()) {
+                    speak("Groq API key set nahi hai boss. Screen par diye button se key enter karein.")
+                    return@Thread
+                }
+
+                val payload = JSONObject().apply {
+                    put("model", "llama-3.3-70b-versatile")
+                    put("messages", JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("role", "system")
+                            put("content", "You are ORION, an ultra-intelligent cybernetic AI assistant created for Ankit. Reply concisely in natural Hindi/Hinglish.")
+                        })
+                        put(JSONObject().apply {
+                            put("role", "user")
+                            put("content", userQuery)
+                        })
+                    })
+                }
+
+                val mediaType = "application/json; charset=utf-8".toMediaType()
+                val body = payload.toString().toRequestBody(mediaType)
+                val req = Request.Builder()
+                    .url("https://api.groq.com/openai/v1/chat/completions")
+                    .header("Authorization", "Bearer $apiKey")
+                    .header("Content-Type", "application/json")
+                    .post(body)
+                    .build()
+
+                val resp = client.newCall(req).execute()
+                val resBody = resp.body?.string() ?: ""
+
+                if (resp.isSuccessful) {
+                    val root = JSONObject(resBody)
+                    val choices = root.getJSONArray("choices")
+                    val answer = choices.getJSONObject(0).getJSONObject("message").getString("content")
+                    speak(answer)
+                } else {
+                    speak("Groq API error. Please check your key.")
+                }
+            } catch (e: Exception) {
+                speak("Connection error: ${e.message}")
+            }
+        }.start()
+    }
+
+    fun speak(text: String) {
+        onStatus("Orion: $text")
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "OrionTTS")
     }
 
     override fun onInit(status: Int) {
@@ -112,8 +132,17 @@ class OrionEngine(private val context: Context, private val onStatus: (String) -
         }
     }
 
+    override fun onReadyForSpeech(params: Bundle?) {}
+    override fun onBeginningOfSpeech() { onStatus("Hearing you...") }
+    override fun onRmsChanged(rmsdB: Float) {}
+    override fun onBufferReceived(buffer: ByteArray?) {}
+    override fun onEndOfSpeech() { onStatus("Processing...") }
+    override fun onError(error: Int) { onStatus("Speech Error: $error") }
+    override fun onPartialResults(partialResults: Bundle?) {}
+    override fun onEvent(eventType: Int, params: Bundle?) {}
+
     fun destroy() {
-        recognizer?.destroy()
+        speechRecognizer?.destroy()
         tts?.stop()
         tts?.shutdown()
     }

@@ -1,396 +1,269 @@
 package com.orion.assistant
 
-import android.Manifest
-import android.animation.ObjectAnimator
-import android.animation.ValueAnimator
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.*
+import android.graphics.Color
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
-import android.net.Uri
-import android.os.BatteryManager
-import android.os.Build
 import android.os.Bundle
-import android.os.PowerManager
-import android.provider.Settings
 import android.view.Gravity
 import android.view.View
-import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.*
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
 class MainActivity : Activity() {
-
-    private lateinit var tvBattery: TextView
-    private lateinit var tvSecurity: TextView
-    private lateinit var tvMode: TextView
-    private lateinit var orbView: ArcOrbView
-    private lateinit var btnKillSwitch: Button
-    private lateinit var btnLaunchOrb: Button
-
-    // Permission Buttons List
-    private val permissionMap = mutableMapOf<String, Button>()
+    private var engine: OrionEngine? = null
+    private lateinit var tvStatus: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Root Container with Ambient Edge Border Glow (Four Corner Light)
-        val rootLayout = FrameLayout(this).apply {
+        engine = OrionEngine(this) { msg ->
+            runOnUiThread {
+                tvStatus.text = msg
+                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        val root = FrameLayout(this).apply {
             setBackgroundColor(Color.parseColor("#050811"))
         }
 
-        val ambientBorder = View(this).apply {
-            val stroke = GradientDrawable().apply {
-                setColor(Color.TRANSPARENT)
-                setStroke(4, Color.parseColor("#00E676"))
-            }
-            background = stroke
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        }
-        rootLayout.addView(ambientBorder)
+        // 1. RGB Sweep Border View
+        val borderView = OrionBorderSweepView(this)
+        root.addView(borderView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
-        // Ambient Border Pulse Animation
-        val borderAnim = ObjectAnimator.ofFloat(ambientBorder, "alpha", 0.2f, 0.85f).apply {
-            duration = 2200
-            repeatMode = ValueAnimator.REVERSE
-            repeatCount = ValueAnimator.INFINITE
-            interpolator = AccelerateDecelerateInterpolator()
-            start()
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         }
 
-        val scrollContainer = ScrollView(this).apply {
-            isVerticalScrollBarEnabled = false
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        }
-
-        val contentLayout = LinearLayout(this).apply {
+        val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(50, 70, 50, 90)
+            setPadding(40, 50, 40, 60)
             gravity = Gravity.CENTER_HORIZONTAL
         }
 
-        // 1. TOP STATUS BAR (Battery | Security | Mode)
-        val statusBar = LinearLayout(this).apply {
+        // Top Status Bar
+        val topBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            weightSum = 3f
-            gravity = Gravity.CENTER_VERTICAL
             setPadding(20, 20, 20, 20)
+            gravity = Gravity.CENTER_VERTICAL
             background = GradientDrawable().apply {
                 cornerRadius = 20f
-                setColor(Color.parseColor("#0D131F"))
-                setStroke(2, Color.parseColor("#1B2A3D"))
+                setColor(Color.parseColor("#0F1424"))
             }
         }
-
-        tvBattery = createStatusItem("⚡ BAT: --%", 1f)
-        tvSecurity = createStatusItem("🔒 OWNER: ANKIT", 1f)
-        tvMode = createStatusItem("🛡 SILENT GUARDIAN", 1f)
-
-        statusBar.addView(tvBattery)
-        statusBar.addView(tvSecurity)
-        statusBar.addView(tvMode)
-        contentLayout.addView(statusBar)
-
-        // Title Section
-        val titleText = TextView(this).apply {
-            text = "PROJECT ORION // PHONE V1"
-            textSize = 20f
+        val tvOwner = TextView(this).apply {
+            text = "⚡ BAT: 100%   🔒 OWNER: ANKIT   🛡️ SENTINEL"
             setTextColor(Color.parseColor("#00E5FF"))
-            typeface = Typeface.MONOSPACE
-            gravity = Gravity.CENTER
-            setPadding(0, 50, 0, 10)
-        }
-        val subText = TextView(this).apply {
-            text = "AI SENTINEL // CLASSIFICATION: OWNER-ONLY"
             textSize = 12f
-            setTextColor(Color.parseColor("#78909C"))
-            typeface = Typeface.MONOSPACE
-            gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 40)
+            typeface = Typeface.DEFAULT_BOLD
         }
-        contentLayout.addView(titleText)
-        contentLayout.addView(subText)
+        topBar.addView(tvOwner)
+        content.addView(topBar)
 
-        // 2. CENTER BREATHING ARC-ORB
-        orbView = ArcOrbView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(360, 360).apply {
+        val tvTitle = TextView(this).apply {
+            text = "\nPROJECT ORION // PHONE V1"
+            setTextColor(Color.parseColor("#00E5FF"))
+            textSize = 20f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+        }
+        content.addView(tvTitle)
+
+        tvStatus = TextView(this).apply {
+            text = "AI SENTINEL // STATUS: READY (TAP ORB TO SPEAK)"
+            setTextColor(Color.parseColor("#76FF03"))
+            textSize = 13f
+            setPadding(0, 10, 0, 20)
+            gravity = Gravity.CENTER
+        }
+        content.addView(tvStatus)
+
+        // 2. Central Animated Neon Orb
+        val orb = OrionArcOrbView(this).apply {
+            val size = (200 * resources.displayMetrics.density).toInt()
+            layoutParams = LinearLayout.LayoutParams(size, size).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
-                setMargins(0, 10, 0, 50)
+                setMargins(0, 10, 0, 25)
+            }
+            isClickable = true
+            setOnClickListener {
+                if (ContextCompat.checkSelfPermission(this@MainActivity, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                    tvStatus.text = "LISTENING NOW..."
+                    engine?.startListening()
+                } else {
+                    ActivityCompat.requestPermissions(this@MainActivity, arrayOf(android.Manifest.permission.RECORD_AUDIO), 101)
+                }
             }
         }
-        contentLayout.addView(orbView)
+        content.addView(orb)
 
-        // Quick Launch Floating Orb Button
-        btnLaunchOrb = Button(this).apply {
+        // 3. Floating Orb Launch Button
+        val btnFloat = Button(this).apply {
             text = "🚀 LAUNCH FLOATING ORION ORB"
             setTextColor(Color.BLACK)
             textSize = 14f
             typeface = Typeface.DEFAULT_BOLD
             background = GradientDrawable().apply {
-                cornerRadius = 24f
+                cornerRadius = 20f
                 setColor(Color.parseColor("#00E5FF"))
             }
-            setPadding(30, 30, 30, 30)
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                setMargins(0, 0, 0, 40)
-            }
+            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            lp.setMargins(0, 10, 0, 15)
+            layoutParams = lp
             setOnClickListener {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this@MainActivity)) {
-                    Toast.makeText(this@MainActivity, "Floating permission enable kijiye pehle!", Toast.LENGTH_SHORT).show()
-                } else {
-                    startService(Intent(this@MainActivity, FloatingBubbleService::class.java))
-                    Toast.makeText(this@MainActivity, "ORION Orb Activated! Tap to speak, Hold to dismiss.", Toast.LENGTH_LONG).show()
-                }
+                startService(Intent(this@MainActivity, FloatingBubbleService::class.java))
             }
         }
-        contentLayout.addView(btnLaunchOrb)
+        content.addView(btnFloat)
 
-        // 3. CONTROL PANEL (PERMISSIONS LIST ACCORDING TO BLUEPRINT V1)
-        val panelHeader = TextView(this).apply {
-            text = "[02] PERMISSION CONTROL PANEL"
+        // 4. BADA KEY BUTTON (Screen par key paste karne ke liye)
+        val btnKey = Button(this).apply {
+            text = "🔑 SET GROQ API KEY"
+            setTextColor(Color.BLACK)
             textSize = 14f
-            setTextColor(Color.parseColor("#00E676"))
+            typeface = Typeface.DEFAULT_BOLD
+            background = GradientDrawable().apply {
+                cornerRadius = 20f
+                setColor(Color.parseColor("#76FF03"))
+            }
+            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            lp.setMargins(0, 5, 0, 25)
+            layoutParams = lp
+            setOnClickListener { showKeyDialog() }
+        }
+        content.addView(btnKey)
+
+        // 5. Permission Control Cards
+        val tvPermHeader = TextView(this).apply {
+            text = "[02] PERMISSION CONTROL PANEL"
+            setTextColor(Color.parseColor("#76FF03"))
+            textSize = 14f
             typeface = Typeface.MONOSPACE
-            setPadding(10, 20, 0, 20)
+            setPadding(0, 15, 0, 15)
         }
-        contentLayout.addView(panelHeader)
+        content.addView(tvPermHeader)
 
-        // Setup individual cards matching Blueprint
-        addPermissionCard(contentLayout, "AUDIO", "Microphone (RECORD_AUDIO)", "Wake-word 'Orion' aur voice reply engine ke liye.") {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 101)
+        addPermissionCard(content, "Microphone (RECORD_AUDIO)", "Wake-word Orion aur voice reply engine ke liye.") {
+            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.RECORD_AUDIO), 101)
         }
-        addPermissionCard(contentLayout, "CAMERA", "Camera (CAMERA)", "Intruder photo capture aur security lock ke liye.") {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), 102)
+        addPermissionCard(content, "Camera (CAMERA)", "Intruder capture aur vision tasks ke liye.") {
+            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.CAMERA), 102)
         }
-        addPermissionCard(contentLayout, "PHONE", "Phone Call State (CALL & STATE)", "Scam call screening aur auto-dial ke liye.") {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_PHONE_STATE, Manifest.permission.CALL_PHONE), 103)
+        addPermissionCard(content, "Phone Call State (CALL_PHONE)", "Call screening aur dialing ke liye.") {
+            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.READ_PHONE_STATE, android.Manifest.permission.CALL_PHONE), 103)
         }
-        addPermissionCard(contentLayout, "SMS", "SMS Access (READ & RECEIVE)", "OTP read, fraud check aur voice reply ke liye.") {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS), 104)
+        addPermissionCard(content, "SMS Access (READ_SMS)", "OTP read aur scam detection ke liye.") {
+            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.READ_SMS, android.Manifest.permission.RECEIVE_SMS), 104)
         }
-        addPermissionCard(contentLayout, "CONTACTS", "Contacts (READ_CONTACTS)", "True caller name pehchanne aur reminders ke liye.") {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_CONTACTS), 105)
-        }
-        addPermissionCard(contentLayout, "LOCATION", "Location (FINE & COARSE)", "Emergency location share aur navigation help ke liye.") {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 106)
-        }
-        addPermissionCard(contentLayout, "NOTIFICATIONS", "Notification Access", "VIP/GF WhatsApp & App summaries detect karne ke liye.") {
-            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-        }
-        addPermissionCard(contentLayout, "OVERLAY", "Floating Bubble (Draw Over Apps)", "Screen ke upar floating glowing orb dikhane ke liye.") {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
-            }
-        }
-        addPermissionCard(contentLayout, "BATTERY", "Battery Optimization Exemption", "Background me service kill na ho isliye exemption.") {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                    data = Uri.parse("package:$packageName")
-                }
-                startActivity(intent)
-            }
-        }
-        addPermissionCard(contentLayout, "CALENDAR", "Calendar Access", "Daily events read aur schedule auto-booking ke liye.") {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR), 107)
+        addPermissionCard(content, "Location (ACCESS_FINE_LOCATION)", "Navigation aur emergency help ke liye.") {
+            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION), 105)
         }
 
-        // 4. EMERGENCY KILL SWITCH (RED BUTTON)
-        btnKillSwitch = Button(this).apply {
-            text = "🛑 EMERGENCY KILL SWITCH (STOP ALL)"
+        // Kill Switch Button
+        val btnKill = Button(this).apply {
+            text = "🔴 EMERGENCY KILL SWITCH (STOP ALL)"
             setTextColor(Color.WHITE)
             textSize = 14f
             typeface = Typeface.DEFAULT_BOLD
             background = GradientDrawable().apply {
-                cornerRadius = 24f
+                cornerRadius = 20f
                 setColor(Color.parseColor("#D50000"))
             }
-            setPadding(30, 35, 30, 35)
-            val params = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                setMargins(0, 50, 0, 40)
-            }
-            layoutParams = params
+            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            lp.setMargins(0, 25, 0, 30)
+            layoutParams = lp
             setOnClickListener {
                 stopService(Intent(this@MainActivity, FloatingBubbleService::class.java))
-                Toast.makeText(this@MainActivity, "ORION Emergency Protocol: Saari Background Services Band!", Toast.LENGTH_LONG).show()
-                finish()
+                engine?.destroy()
+                finishAffinity()
             }
         }
-        contentLayout.addView(btnKillSwitch)
+        content.addView(btnKill)
 
-        scrollContainer.addView(contentLayout)
-        rootLayout.addView(scrollContainer)
-        setContentView(rootLayout)
+        scroll.addView(content)
+        root.addView(scroll)
+        setContentView(root)
     }
 
-    override fun onResume() {
-        super.onResume()
-        updateStatusHeader()
-        refreshPermissionStates()
-    }
-
-    private fun updateStatusHeader() {
-        val bm = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
-        val batLevel = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
-        tvBattery.text = "⚡ BAT: $batLevel%"
-    }
-
-    private fun addPermissionCard(parent: LinearLayout, key: String, title: String, desc: String, onGrant: () -> Unit) {
+    private fun addPermissionCard(parent: LinearLayout, title: String, desc: String, action: () -> Unit) {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(35, 30, 35, 30)
+            setPadding(30, 25, 30, 25)
             background = GradientDrawable().apply {
-                cornerRadius = 20f
-                setColor(Color.parseColor("#0D131F"))
-                setStroke(2, Color.parseColor("#1B2A3D"))
+                cornerRadius = 18f
+                setColor(Color.parseColor("#0C1322"))
+                setStroke(2, Color.parseColor("#1B2A4A"))
             }
-            val params = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                setMargins(0, 0, 0, 24)
-            }
-            layoutParams = params
+            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            lp.setMargins(0, 10, 0, 10)
+            layoutParams = lp
         }
 
-        val cardTitle = TextView(this).apply {
+        val tvT = TextView(this).apply {
             text = title
-            textSize = 14f
-            setTextColor(Color.parseColor("#FFFFFF"))
+            setTextColor(Color.WHITE)
+            textSize = 15f
             typeface = Typeface.DEFAULT_BOLD
         }
-
-        val cardDesc = TextView(this).apply {
+        val tvD = TextView(this).apply {
             text = desc
+            setTextColor(Color.parseColor("#8892B0"))
             textSize = 12f
-            setTextColor(Color.parseColor("#78909C"))
-            setPadding(0, 8, 0, 20)
+            setPadding(0, 6, 0, 15)
         }
-
-        val btn = Button(this).apply {
-            text = "Enable Permission"
-            textSize = 12f
+        val btnAction = Button(this).apply {
+            text = "✔ GRANT / CHECK PERMISSION"
             setTextColor(Color.parseColor("#00E5FF"))
+            textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD
             background = GradientDrawable().apply {
-                cornerRadius = 16f
-                setColor(Color.parseColor("#151D2A"))
+                cornerRadius = 14f
+                setColor(Color.parseColor("#12253B"))
                 setStroke(2, Color.parseColor("#00E5FF"))
             }
-            setPadding(25, 20, 25, 20)
-            setOnClickListener { onGrant() }
+            setOnClickListener { action() }
         }
 
-        permissionMap[key] = btn
-
-        card.addView(cardTitle)
-        card.addView(cardDesc)
-        card.addView(btn)
+        card.addView(tvT)
+        card.addView(tvD)
+        card.addView(btnAction)
         parent.addView(card)
     }
 
-    private fun refreshPermissionStates() {
-        checkAndApply("AUDIO", ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
-        checkAndApply("CAMERA", ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
-        checkAndApply("PHONE", ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED)
-        checkAndApply("SMS", ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED)
-        checkAndApply("CONTACTS", ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED)
-        checkAndApply("LOCATION", ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
-        checkAndApply("CALENDAR", ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED)
-
-        // Notification listener check
-        val notifGranted = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")?.contains(packageName) == true
-        checkAndApply("NOTIFICATIONS", notifGranted)
-
-        // Overlay check
-        val overlayGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(this) else true
-        checkAndApply("OVERLAY", overlayGranted)
-
-        // Battery optimization
-        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-        val batteryIgnored = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) pm.isIgnoringBatteryOptimizations(packageName) else true
-        checkAndApply("BATTERY", batteryIgnored)
-    }
-
-    private fun checkAndApply(key: String, isGranted: Boolean) {
-        val btn = permissionMap[key] ?: return
-        if (isGranted) {
-            btn.text = "✔ GRANTED & ACTIVE"
-            btn.setTextColor(Color.parseColor("#00E676"))
-            btn.background = GradientDrawable().apply {
-                cornerRadius = 16f
-                setColor(Color.parseColor("#1B5E20"))
-                setStroke(2, Color.parseColor("#00E676"))
-            }
-            btn.isEnabled = false
-        }
-    }
-
-    private fun createStatusItem(text: String, weight: Float): TextView {
-        return TextView(this).apply {
-            this.text = text
-            textSize = 10f
-            setTextColor(Color.parseColor("#00E5FF"))
-            typeface = Typeface.MONOSPACE
-            gravity = Gravity.CENTER
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, weight)
-        }
-    }
-
-    // Custom Arc-Reactor Breathing Orb Component
-    class ArcOrbView(context: Context) : View(context) {
-        private var breathProgress = 0f
-        private val paintCore = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = 14f
-            color = Color.parseColor("#00E676")
-        }
-        private val paintRing = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = 6f
-            color = Color.parseColor("#00E5FF")
-        }
-        private val paintGlow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-            color = Color.parseColor("#1100E676")
+    private fun showKeyDialog() {
+        val prefs = getSharedPreferences("orion_config", Context.MODE_PRIVATE)
+        val currentKey = prefs.getString("groq_key", "") ?: ""
+        val input = EditText(this).apply {
+            hint = "gsk_..."
+            setTextColor(Color.BLACK)
+            setText(currentKey)
         }
 
-        init {
-            ValueAnimator.ofFloat(0.85f, 1.15f).apply {
-                duration = 1800
-                repeatMode = ValueAnimator.REVERSE
-                repeatCount = ValueAnimator.INFINITE
-                interpolator = AccelerateDecelerateInterpolator()
-                addUpdateListener {
-                    breathProgress = it.animatedValue as Float
-                    invalidate()
+        AlertDialog.Builder(this)
+            .setTitle("🔑 Groq Llama-3.3 Key")
+            .setMessage("Apni Groq API Key yahan paste karein:")
+            .setView(input)
+            .setPositiveButton("Save Key") { _, _ ->
+                val k = input.text.toString().trim()
+                if (k.isNotEmpty()) {
+                    prefs.edit().putString("groq_key", k).apply()
+                    Toast.makeText(this, "API Key Saved Successfully!", Toast.LENGTH_SHORT).show()
+                    engine?.speak("Orion system online. API Key save ho gayi hai boss.")
                 }
-                start()
             }
-        }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
 
-        override fun onDraw(canvas: Canvas) {
-            super.onDraw(canvas)
-            val cx = width / 2f
-            val cy = height / 2f
-            val baseRadius = (width.coerceAtMost(height) / 2.6f) * breathProgress
-
-            canvas.drawCircle(cx, cy, baseRadius * 0.9f, paintGlow)
-            canvas.drawCircle(cx, cy, baseRadius, paintCore)
-            canvas.drawCircle(cx, cy, baseRadius * 1.25f, paintRing)
-        }
+    override fun onDestroy() {
+        super.onDestroy()
+        engine?.destroy()
     }
 }
