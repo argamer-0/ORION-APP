@@ -10,14 +10,14 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 class OrionEngine(
     private val context: Context,
@@ -29,11 +29,6 @@ class OrionEngine(
     private var tts: TextToSpeech? = null
     var isContinuousMode = false
     private val mainHandler = Handler(Looper.getMainLooper())
-
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS)
-        .build()
 
     init {
         tts = TextToSpeech(context, this)
@@ -140,6 +135,15 @@ class OrionEngine(
 
     private fun callGroq(prompt: String, key: String): String {
         return try {
+            val url = URL("https://api.groq.com/openai/v1/chat/completions")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Authorization", "Bearer $key")
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            conn.connectTimeout = 20000
+            conn.readTimeout = 20000
+            conn.doOutput = true
+
             val json = JSONObject().apply {
                 put("model", "llama-3.3-70b-versatile")
                 put("messages", JSONArray().apply {
@@ -153,22 +157,31 @@ class OrionEngine(
                     })
                 })
             }
-            val body = json.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-            val req = Request.Builder()
-                .url("https://api.groq.com/openai/v1/chat/completions")
-                .header("Authorization", "Bearer $key")
-                .post(body)
-                .build()
-            val res = client.newCall(req).execute()
-            val resStr = res.body?.string() ?: ""
-            if (res.isSuccessful) {
-                JSONObject(resStr).getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")
+
+            val writer = OutputStreamWriter(conn.outputStream)
+            writer.write(json.toString())
+            writer.flush()
+            writer.close()
+
+            if (conn.responseCode == 200) {
+                val reader = BufferedReader(InputStreamReader(conn.inputStream))
+                val res = reader.readText()
+                reader.close()
+                JSONObject(res).getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")
             } else ""
         } catch (_: Exception) { "" }
     }
 
     private fun callGemini(prompt: String, key: String): String {
         return try {
+            val url = URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$key")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            conn.connectTimeout = 20000
+            conn.readTimeout = 20000
+            conn.doOutput = true
+
             val json = JSONObject().apply {
                 put("contents", JSONArray().apply {
                     put(JSONObject().apply {
@@ -178,15 +191,17 @@ class OrionEngine(
                     })
                 })
             }
-            val body = json.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-            val req = Request.Builder()
-                .url("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$key")
-                .post(body)
-                .build()
-            val res = client.newCall(req).execute()
-            val resStr = res.body?.string() ?: ""
-            if (res.isSuccessful) {
-                JSONObject(resStr).getJSONArray("candidates").getJSONObject(0).getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text")
+
+            val writer = OutputStreamWriter(conn.outputStream)
+            writer.write(json.toString())
+            writer.flush()
+            writer.close()
+
+            if (conn.responseCode == 200) {
+                val reader = BufferedReader(InputStreamReader(conn.inputStream))
+                val res = reader.readText()
+                reader.close()
+                JSONObject(res).getJSONArray("candidates").getJSONObject(0).getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text")
             } else ""
         } catch (_: Exception) { "" }
     }
