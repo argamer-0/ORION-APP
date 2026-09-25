@@ -20,8 +20,8 @@ import android.widget.Toast
 class FloatingBubbleService : Service() {
 
     private var wm: WindowManager? = null
-    private var edgeView: View? = null
-    private var orbView: View? = null
+    private var edgeOverlay: View? = null
+    private var orbOverlay: View? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -34,7 +34,8 @@ class FloatingBubbleService : Service() {
             WindowManager.LayoutParams.TYPE_PHONE
         }
 
-        edgeView = BackgroundBorder(this)
+        // Full Screen 4-Corner Multi-Color RGB Moving Edge Light
+        edgeOverlay = BackgroundEdgeView(this)
         val edgeParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -44,44 +45,27 @@ class FloatingBubbleService : Service() {
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         )
-        wm?.addView(edgeView, edgeParams)
+        wm?.addView(edgeOverlay, edgeParams)
 
-        val glassOrb = FrameLayout(this).apply {
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.parseColor("#90060913"))
-                setStroke(4, Color.parseColor("#00E5FF"))
-            }
-            setPadding(10, 10, 10, 10)
-        }
-
-        val tv = TextView(this).apply {
-            text = "ORION"
-            setTextColor(Color.parseColor("#00E676"))
-            textSize = 10f
-            typeface = Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER
-        }
-        glassOrb.addView(tv, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER))
-
-        orbView = glassOrb
+        // Glassmorphic Maya-Style Invisible Orb
+        orbOverlay = MayaFloatingOrb(this)
         val orbParams = WindowManager.LayoutParams(
-            170, 170,
+            220, 220,
             type,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 90
+            x = 80
             y = 350
         }
 
-        glassOrb.setOnTouchListener(object : View.OnTouchListener {
+        orbOverlay?.setOnTouchListener(object : View.OnTouchListener {
             private var initX = 0
             private var initY = 0
             private var touchX = 0f
             private var touchY = 0f
-            private var startTime = 0L
+            private var touchTime = 0L
 
             override fun onTouch(v: View?, event: MotionEvent): Boolean {
                 when (event.action) {
@@ -90,23 +74,23 @@ class FloatingBubbleService : Service() {
                         initY = orbParams.y
                         touchX = event.rawX
                         touchY = event.rawY
-                        startTime = System.currentTimeMillis()
+                        touchTime = System.currentTimeMillis()
                         return true
                     }
                     MotionEvent.ACTION_MOVE -> {
                         orbParams.x = initX + (event.rawX - touchX).toInt()
                         orbParams.y = initY + (event.rawY - touchY).toInt()
-                        wm?.updateViewLayout(orbView, orbParams)
+                        wm?.updateViewLayout(orbOverlay, orbParams)
                         return true
                     }
                     MotionEvent.ACTION_UP -> {
-                        val duration = System.currentTimeMillis() - startTime
+                        val duration = System.currentTimeMillis() - touchTime
                         if (Math.abs(event.rawX - touchX) < 15 && Math.abs(event.rawY - touchY) < 15) {
                             if (duration > 1500) {
                                 Toast.makeText(this@FloatingBubbleService, "ORION Background Stop", Toast.LENGTH_SHORT).show()
                                 stopSelf()
                             } else {
-                                Toast.makeText(this@FloatingBubbleService, "ORION Active Listening", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(this@FloatingBubbleService, "ORION Listening...", Toast.LENGTH_SHORT).show()
                             }
                         }
                         return true
@@ -115,16 +99,17 @@ class FloatingBubbleService : Service() {
                 return false
             }
         })
-        wm?.addView(orbView, orbParams)
+
+        wm?.addView(orbOverlay, orbParams)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        if (edgeView != null) { wm?.removeView(edgeView); edgeView = null }
-        if (orbView != null) { wm?.removeView(orbView); orbView = null }
+        if (edgeOverlay != null) { wm?.removeView(edgeOverlay); edgeOverlay = null }
+        if (orbOverlay != null) { wm?.removeView(orbOverlay); orbOverlay = null }
     }
 
-    class BackgroundBorder(context: Context) : View(context) {
+    class BackgroundEdgeView(context: Context) : View(context) {
         private var rot = 0f
         private val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
@@ -154,6 +139,56 @@ class FloatingBubbleService : Service() {
             shader.setLocalMatrix(m)
             p.shader = shader
             canvas.drawRoundRect(RectF(6f, 6f, width - 6f, height - 6f), 40f, 40f, p)
+        }
+    }
+
+    class MayaFloatingOrb(context: Context) : View(context) {
+        private var sweep = 0f
+        private val pRing = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 4f
+            color = Color.parseColor("#3000E5FF")
+        }
+        private val pArc = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 7f
+            color = Color.WHITE
+            strokeCap = Paint.Cap.ROUND
+        }
+        private val pText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = 24f
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        private val pBg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = Color.parseColor("#80060913")
+        }
+
+        init {
+            ValueAnimator.ofFloat(0f, 360f).apply {
+                duration = 3000
+                repeatCount = ValueAnimator.INFINITE
+                interpolator = LinearInterpolator()
+                addUpdateListener {
+                    sweep = it.animatedValue as Float
+                    invalidate()
+                }
+                start()
+            }
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            val cx = width / 2f
+            val cy = height / 2f
+            val rad = width.coerceAtMost(height) / 2.4f
+
+            canvas.drawCircle(cx, cy, rad, pBg)
+            canvas.drawCircle(cx, cy, rad, pRing)
+            canvas.drawArc(RectF(cx - rad, cy - rad, cx + rad, cy + rad), sweep, 90f, false, pArc)
+            canvas.drawText("O.R.I.O.N", cx, cy + 8f, pText)
         }
     }
 }
