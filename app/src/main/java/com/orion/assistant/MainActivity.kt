@@ -163,10 +163,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this@MainActivity)) {
                     Toast.makeText(this@MainActivity, "Floating permission enable kijiye pehle!", Toast.LENGTH_SHORT).show()
                 } else {
-                    try {
-                        val intent = Intent().setClassName(packageName, "$packageName.FloatingBubbleService")
-                        startService(intent)
-                    } catch (e: Exception) {}
+                    startService(Intent(this@MainActivity, FloatingBubbleService::class.java))
                     Toast.makeText(this@MainActivity, "ORION Orb Activated! Tap to speak, Hold to dismiss.", Toast.LENGTH_LONG).show()
                 }
             }
@@ -185,7 +182,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
         // Setup individual cards matching Blueprint
         addPermissionCard(contentLayout, "AUDIO", "Microphone (RECORD_AUDIO)", "Wake-word 'Orion' aur voice reply engine ke liye.") {
-            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.RECORD_AUDIO), 101)
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 101)
         }
         addPermissionCard(contentLayout, "CAMERA", "Camera (CAMERA)", "Intruder photo capture aur security lock ke liye.") {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), 102)
@@ -241,10 +238,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             }
             layoutParams = params
             setOnClickListener {
-                try {
-                    val intent = Intent().setClassName(packageName, "$packageName.FloatingBubbleService")
-                    stopService(intent)
-                } catch (e: Exception) {}
+                stopService(Intent(this@MainActivity, FloatingBubbleService::class.java))
                 Toast.makeText(this@MainActivity, "ORION Emergency Protocol: Saari Background Services Band!", Toast.LENGTH_LONG).show()
                 finish()
             }
@@ -285,7 +279,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     private fun startListening() {
-        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+        if (checkCallingOrSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.RECORD_AUDIO), 101)
             return
         }
@@ -430,7 +424,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     private fun refreshPermissionStates() {
-        checkAndApply("AUDIO", ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+        checkAndApply("AUDIO", ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
         checkAndApply("CAMERA", ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
         checkAndApply("PHONE", ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED)
         checkAndApply("SMS", ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED)
