@@ -26,6 +26,7 @@ import androidx.core.content.ContextCompat
 
 class MainActivity : Activity() {
     private var engine: OrionEngine? = null
+    private var engine: OrionEngine? = null
 
     private lateinit var tvBattery: TextView
     private lateinit var tvSecurity: TextView
