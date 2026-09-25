@@ -19,19 +19,6 @@ import android.view.Gravity
 import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.*
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
-import android.speech.tts.TextToSpeech
-import java.net.HttpURLConnection
-import java.net.URL
-import java.io.OutputStreamWriter
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import org.json.JSONObject
-import org.json.JSONArray
-import java.util.Locale
-import kotlin.concurrent.thread
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
