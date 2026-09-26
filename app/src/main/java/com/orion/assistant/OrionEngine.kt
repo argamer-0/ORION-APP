@@ -189,6 +189,20 @@ class OrionEngine(
         }
     }
 
+    
+    private fun executeAction(raw: String) {
+        val lower = raw.lowercase(java.util.Locale.ROOT)
+        if (lower.contains("[action:open_whatsapp]")) {
+            val intent = context.packageManager.getLaunchIntentForPackage("com.whatsapp")
+            if (intent != null) context.startActivity(intent)
+        } else if (lower.contains("[action:open_camera]")) {
+            val intent = android.content.Intent("android.media.action.IMAGE_CAPTURE").apply {
+                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        }
+    }
+
     fun speak(text: String) {
         val clean = text.replace(Regex("[*#_`~]"), "").trim()
         isSpeakingNow = true
