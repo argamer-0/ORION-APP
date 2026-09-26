@@ -138,8 +138,8 @@ class OrionEngine(
     }
 
     private fun callGeminiAPI(prompt: String, key: String): String {
-        val modelName = "gemini-2.0-flash"
-        val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$key"
+        val modelName = "gemini-3.8-flash"
+        val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent"
 
         val systemInstruction = "Aapka naam ORION hai. Aap Ankit ke smart, natural, respectful aur friendly AI assistant ho. Natural Hindi/Hinglish me bina kisi repetition ke fresh jawab do."
 
@@ -153,43 +153,47 @@ class OrionEngine(
             })
         }.toString()
 
-        return try {
-            val url = URL(endpoint)
-            val conn = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                connectTimeout = 12000
-                readTimeout = 15000
-                doOutput = true
-                doInput = true
-            }
+        for (attempt in 1..3) {
+            try {
+                val url = URL(endpoint)
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                    setRequestProperty("x-goog-api-key", key.trim())
+                    connectTimeout = 12000
+                    readTimeout = 15000
+                    doOutput = true
+                    doInput = true
+                }
 
-            OutputStreamWriter(conn.outputStream, "UTF-8").use {
-                it.write(jsonBody)
-                it.flush()
-            }
+                OutputStreamWriter(conn.outputStream, "UTF-8").use {
+                    it.write(jsonBody)
+                    it.flush()
+                }
 
-            val code = conn.responseCode
-            if (code == 200) {
-                val reader = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8"))
-                val res = reader.readText()
-                reader.close()
-                val cand = JSONObject(res).getJSONArray("candidates").getJSONObject(0)
-                cand.getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text").trim()
-            } else {
-                val errStream = conn.errorStream ?: conn.inputStream
-                val errResponse = errStream?.bufferedReader()?.use { it.readText() } ?: "Empty error stream"
-                android.util.Log.e("ORION_DIAG", "[HTTP $code on $modelName]: $errResponse")
-                "[HTTP $code on $modelName]: $errResponse"
+                val code = conn.responseCode
+                if (code == 200) {
+                    val reader = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8"))
+                    val res = reader.readText()
+                    reader.close()
+                    val cand = JSONObject(res).getJSONArray("candidates").getJSONObject(0)
+                    return cand.getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text").trim()
+                } else if (code == 503) {
+                    Thread.sleep(1200)
+                    continue
+                } else {
+                    val errStream = conn.errorStream ?: conn.inputStream
+                    val errResponse = errStream?.bufferedReader()?.use { it.readText() } ?: "Empty error"
+                    return "[HTTP $code on $modelName]: $errResponse"
+                }
+            } catch (e: Exception) {
+                if (attempt == 3) return "[NETWORK EXCEPTION on $modelName]: ${e.javaClass.simpleName} - ${e.message}"
+                Thread.sleep(1000)
             }
-        } catch (e: Exception) {
-            val exMsg = "[NETWORK/SSL Exception on $modelName]: ${e.javaClass.simpleName} - ${e.message}"
-            android.util.Log.e("ORION_DIAG", exMsg, e)
-            exMsg
         }
+        return "Server busy, please try again in a moment."
     }
 
-    
     private fun executeAction(raw: String) {
         val lower = raw.lowercase(java.util.Locale.ROOT)
         if (lower.contains("[action:open_whatsapp]")) {
