@@ -43,7 +43,7 @@ class OrionEngine(
             if (isContinuousMode && !isSpeakingNow) {
                 val funnyLines = arrayOf(
                     "Arey Ankit boss! Itna sannata kyun hai? Kuch boliye na, main bore ho rahi hoon!",
-                    "Kya hua boss, mujhse naraz ho kya? Kuch bol kyun nahi rahe?",
+                    "Kya hua boss, mujhse naraz ho kya? Kuch bolte kyun nahi?",
                     "Sun rahe ho na Ankit boss? Chup-chap mat baitho, hukum kijiye!"
                 )
                 replyImmediate(funnyLines[Random.nextInt(funnyLines.size)])
@@ -160,9 +160,9 @@ class OrionEngine(
         return try {
             val start = text.indexOf("[$tag:") + tag.length + 2
             val end = text.indexOf("]", start)
-            if (start != -1 && end != -1) text.substring(start, end) else "trending bollywood song"
+            if (start != -1 && end != -1) text.substring(start, end) else "trending song"
         } catch (_: Exception) {
-            "trending bollywood song"
+            "trending song"
         }
     }
 
@@ -227,7 +227,7 @@ class OrionEngine(
             val geminiKey = prefs.getString("gemini_key", "")?.trim() ?: ""
 
             if (geminiKey.isEmpty()) {
-                val noKeyMsg = "Ankit boss, pehle KEYS button daba kar apni Google Gemini API key save kar lijiye na!"
+                val noKeyMsg = "Ankit boss, KEYS button dabakar apni Gemini API key daal dijiye na!"
                 mainHandler.post {
                     onStatus("STANDBY")
                     onMessage(noKeyMsg, false)
@@ -249,13 +249,9 @@ class OrionEngine(
     }
 
     private fun callGeminiAPI(prompt: String, key: String): String {
-        val endpoints = arrayOf(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$key",
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=$key",
-            "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=$key"
-        )
+        val models = arrayOf("gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash")
 
-        val systemInstruction = "Aapka naam ORION hai. Aap Ankit Boss ki sabse pyaari, loyal, chulbuli, mazaakiya aur super-intelligent female AI dost ho. Hamesha Ankit ko 'Ankit boss' bolkar bulao. Ekdum natural, realistic ladki ki tarah Hindi me baat karo. User ka naam 'Ankit' hai aur aapka naam 'Orion'. Har sawal ka alag, dynamic aur fresh jawab do. Agar YouTube chalane ko kahe to text me '[action:play_youtube:song_name]' include karo. Agar WhatsApp, Camera, Chrome, Freefire, Torch, Volume ke liye bole to respect actions '[action:open_whatsapp]', '[action:open_camera]', '[action:torch_on]', '[action:volume_full]' return karo. Kabhi koi ratti hui line repeat mat karna."
+        val systemInstruction = "Aapka naam ORION hai. Aap Ankit Boss ki sabse pyaari, loyal, chulbuli, mazaakiya aur super-smart Hindi female AI companion ho. Hamesha Ankit ko 'Ankit boss' bolkar bulao. Ekdum natural ladki ki tarah Hindi aur Hinglish me baat karo jaise sach me koi baat kar rahi ho. User ka naam Ankit hai. Har sawal ka mazedaar, mazaakiya aur fresh jawab do. Agar YouTube chalane ko kahe to text me '[action:play_youtube:song_name]' aur sath me bolo ki gana chala diya boss. Agar camera, whatsapp, torch, chrome kholna ho to action tag lagao."
 
         val json = JSONObject().apply {
             put("contents", JSONArray().apply {
@@ -269,14 +265,15 @@ class OrionEngine(
             })
         }
 
-        for (endpoint in endpoints) {
+        for (m in models) {
+            val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent?key=$key"
             try {
                 val url = URL(endpoint)
                 val conn = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                    connectTimeout = 12000
-                    readTimeout = 15000
+                    connectTimeout = 10000
+                    readTimeout = 12000
                     doOutput = true
                     doInput = true
                 }
@@ -296,7 +293,7 @@ class OrionEngine(
                 }
             } catch (_: Exception) {}
         }
-        return "Ankit boss, Gemini API se connect hone me dikkat ho rahi hai. Kripya internet ya API key check kar lijiye."
+        return "Ankit boss, internet thoda slow lag raha hai ya API key check karni padegi!"
     }
 
     fun speak(text: String) {
