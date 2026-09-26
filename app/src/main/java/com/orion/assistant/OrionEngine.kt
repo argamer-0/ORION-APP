@@ -138,113 +138,55 @@ class OrionEngine(
     }
 
     private fun callGeminiAPI(prompt: String, key: String): String {
-        val models = arrayOf("gemini-1.5-flash", "gemini-2.0-flash", "gemini-pro")
-        var lastDiagnosticError = "NO_ATTEMPT"
+        val modelName = "gemini-2.5-flash"
+        val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$key"
+
+        val systemInstruction = "Aapka naam ORION hai. Aap Ankit ke smart, natural, respectful aur friendly AI assistant ho. Natural Hindi/Hinglish me bina kisi repetition ke fresh jawab do."
 
         val jsonBody = JSONObject().apply {
             put("contents", JSONArray().apply {
                 put(JSONObject().apply {
                     put("parts", JSONArray().apply {
-                        put(JSONObject().apply { put("text", prompt) })
+                        put(JSONObject().apply { put("text", "$systemInstruction\nUser: $prompt") })
                     })
                 })
             })
         }.toString()
 
-        for (m in models) {
-            val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent?key=$key"
-            try {
-                val url = URL(endpoint)
-                val conn = (url.openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                    connectTimeout = 12000
-                    readTimeout = 15000
-                    doOutput = true
-                    doInput = true
-                }
-
-                OutputStreamWriter(conn.outputStream, "UTF-8").use {
-                    it.write(jsonBody)
-                    it.flush()
-                }
-
-                val code = conn.responseCode
-                if (code == 200) {
-                    val reader = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8"))
-                    val res = reader.readText()
-                    reader.close()
-                    val cand = JSONObject(res).getJSONArray("candidates").getJSONObject(0)
-                    val text = cand.getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text").trim()
-                    if (text.isNotEmpty()) return text
-                } else {
-                    val errStream = conn.errorStream ?: conn.inputStream
-                    val errResponse = errStream?.bufferedReader()?.use { it.readText() } ?: "Empty error stream"
-                    lastDiagnosticError = "[HTTP $code on $m]: $errResponse"
-                    android.util.Log.e("ORION_DIAG", lastDiagnosticError)
-                }
-            } catch (e: Exception) {
-                lastDiagnosticError = "[NETWORK/SSL Exception on $m]: ${e.javaClass.simpleName} - ${e.message}"
-                android.util.Log.e("ORION_DIAG", lastDiagnosticError, e)
-            }
-        }
-        // Generic message band, exact diagnostic return karo
-        return "DEBUG_ERROR: $lastDiagnosticError"
-    }
-
-    
-    private fun executeAction(rawText: String) {
-        val lower = rawText.lowercase(java.util.Locale.ROOT)
-        if (lower.contains("[action:play_youtube]")) {
-            val q = extractParam(rawText, "play_youtube")
-            try {
-                val intent = android.content.Intent(android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).apply {
-                    putExtra(android.app.SearchManager.QUERY, q)
-                    setPackage("com.google.android.youtube")
-                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(intent)
-            } catch (_: Exception) {
-                val web = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.youtube.com/results?search_query=" + java.net.URLEncoder.encode(q, "UTF-8"))).apply {
-                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(web)
-            }
-        } else if (lower.contains("[action:open_whatsapp]")) {
-            launchApp("com.whatsapp")
-        } else if (lower.contains("[action:open_camera]")) {
-            val intent = android.content.Intent("android.media.action.IMAGE_CAPTURE").apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }
-            context.startActivity(intent)
-        } else if (lower.contains("[action:torch_on]")) {
-            setTorch(true)
-        } else if (lower.contains("[action:torch_off]")) {
-            setTorch(false)
-        } else if (lower.contains("[action:volume_full]")) {
-            val am = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
-            am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC), android.media.AudioManager.FLAG_SHOW_UI)
-        }
-    }
-
-    private fun extractParam(text: String, tag: String): String {
         return try {
-            val s = text.indexOf("[$tag:") + tag.length + 2
-            val e = text.indexOf("]", s)
-            if (s != -1 && e != -1) text.substring(s, e) else "trending song"
-        } catch (_: Exception) { "trending song" }
-    }
+            val url = URL(endpoint)
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                connectTimeout = 12000
+                readTimeout = 15000
+                doOutput = true
+                doInput = true
+            }
 
-    private fun launchApp(pkg: String) {
-        try {
-            val intent = context.packageManager.getLaunchIntentForPackage(pkg)?.apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }
-            if (intent != null) context.startActivity(intent)
-        } catch (_: Exception) {}
-    }
+            OutputStreamWriter(conn.outputStream, "UTF-8").use {
+                it.write(jsonBody)
+                it.flush()
+            }
 
-    private fun setTorch(on: Boolean) {
-        try {
-            val cam = context.getSystemService(android.content.Context.CAMERA_SERVICE) as android.hardware.camera2.CameraManager
-            cam.setTorchMode(cam.cameraIdList[0], on)
-        } catch (_: Exception) {}
+            val code = conn.responseCode
+            if (code == 200) {
+                val reader = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8"))
+                val res = reader.readText()
+                reader.close()
+                val cand = JSONObject(res).getJSONArray("candidates").getJSONObject(0)
+                cand.getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text").trim()
+            } else {
+                val errStream = conn.errorStream ?: conn.inputStream
+                val errResponse = errStream?.bufferedReader()?.use { it.readText() } ?: "Empty error stream"
+                android.util.Log.e("ORION_DIAG", "[HTTP $code on $modelName]: $errResponse")
+                "[HTTP $code on $modelName]: $errResponse"
+            }
+        } catch (e: Exception) {
+            val exMsg = "[NETWORK/SSL Exception on $modelName]: ${e.javaClass.simpleName} - ${e.message}"
+            android.util.Log.e("ORION_DIAG", exMsg, e)
+            exMsg
+        }
     }
 
     fun speak(text: String) {
