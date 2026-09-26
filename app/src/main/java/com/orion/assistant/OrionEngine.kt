@@ -2,7 +2,10 @@ package com.orion.assistant
 
 import android.content.Context
 import android.content.Intent
+import android.hardware.camera2.CameraManager
+import android.media.AudioManager
 import android.media.MediaPlayer
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -11,7 +14,6 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
-import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.*
@@ -40,15 +42,11 @@ class OrionEngine(
             }
             override fun onDone(utteranceId: String?) {
                 isSpeakingNow = false
-                if (isContinuousMode) {
-                    mainHandler.postDelayed({ startListening() }, 600)
-                }
+                if (isContinuousMode) mainHandler.postDelayed({ startListening() }, 600)
             }
             override fun onError(utteranceId: String?) {
                 isSpeakingNow = false
-                if (isContinuousMode) {
-                    mainHandler.postDelayed({ startListening() }, 800)
-                }
+                if (isContinuousMode) mainHandler.postDelayed({ startListening() }, 800)
             }
         })
         initRecognizer()
@@ -105,10 +103,109 @@ class OrionEngine(
         val text = matches?.firstOrNull()?.trim() ?: ""
         if (text.isNotEmpty() && text.length > 1) {
             onMessage(text, true)
-            onStatus("THINKING...")
-            queryAI(text)
+            handleCommandOrQuery(text)
         } else if (isContinuousMode) {
             mainHandler.postDelayed({ startListening() }, 400)
+        }
+    }
+
+    private fun handleCommandOrQuery(prompt: String) {
+        val lower = prompt.lowercase(Locale.ROOT)
+
+        // --- DIRECT DEVICE CONTROL COMMANDS ---
+        if (lower.contains("youtube") || lower.contains("यूट्यूब") || lower.contains("युटुब")) {
+            executeAppLaunch("com.google.android.youtube", "YouTube open kar raha hoon Ankit bhai.")
+            return
+        }
+
+        if (lower.contains("camera") || lower.contains("कैमरा")) {
+            try {
+                val intent = Intent("android.media.action.IMAGE_CAPTURE").apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+                replyImmediate("Camera open kar diya hai boss.")
+            } catch (_: Exception) {
+                replyImmediate("Camera start nahi ho paya boss.")
+            }
+            return
+        }
+
+        if (lower.contains("whatsapp") || lower.contains("व्हाट्सएप")) {
+            executeAppLaunch("com.whatsapp", "WhatsApp open kar raha hoon.")
+            return
+        }
+
+        if (lower.contains("instagram") || lower.contains("इंस्टाग्राम")) {
+            executeAppLaunch("com.instagram.android", "Instagram open kar raha hoon.")
+            return
+        }
+
+        if (lower.contains("free fire") || lower.contains("फ्री फायर")) {
+            executeAppLaunch("com.dts.freefiremax", "Free Fire MAX launch kar raha hoon bhai.")
+            return
+        }
+
+        if (lower.contains("chrome") || lower.contains("क्रोम") || lower.contains("browser")) {
+            executeAppLaunch("com.android.chrome", "Chrome browser open kar raha hoon.")
+            return
+        }
+
+        if (lower.contains("flashlight on") || lower.contains("टॉर्च जलाओ") || lower.contains("torch on")) {
+            toggleFlashlight(true)
+            return
+        }
+
+        if (lower.contains("flashlight off") || lower.contains("टॉर्च बंद") || lower.contains("torch off")) {
+            toggleFlashlight(false)
+            return
+        }
+
+        if (lower.contains("volume full") || lower.contains("आवाज बढ़ाओ") || lower.contains("volume up")) {
+            val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            audio.setStreamVolume(AudioManager.STREAM_MUSIC, audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC), AudioManager.FLAG_SHOW_UI)
+            replyImmediate("Media volume full kar diya hai boss.")
+            return
+        }
+
+        // --- IF GENERAL QUESTION: ROUTE TO DYNAMIC AI ---
+        onStatus("THINKING...")
+        queryAI(prompt)
+    }
+
+    private fun executeAppLaunch(pkg: String, responseText: String) {
+        try {
+            val pm = context.packageManager
+            val intent = pm.getLaunchIntentForPackage(pkg)?.apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            if (intent != null) {
+                context.startActivity(intent)
+                replyImmediate(responseText)
+            } else {
+                replyImmediate("Boss ye app aapke phone mein installed nahi mila.")
+            }
+        } catch (e: Exception) {
+            replyImmediate("App open karne mein error aaya boss.")
+        }
+    }
+
+    private fun toggleFlashlight(status: Boolean) {
+        try {
+            val cam = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+            val id = cam.cameraIdList[0]
+            cam.setTorchMode(id, status)
+            replyImmediate(if (status) "Torch on kar di hai boss." else "Torch band kar di hai boss.")
+        } catch (_: Exception) {
+            replyImmediate("Flashlight control nahi ho payi boss.")
+        }
+    }
+
+    private fun replyImmediate(text: String) {
+        mainHandler.post {
+            onStatus("REPLYING...")
+            onMessage(text, false)
+            speak(text)
         }
     }
 
@@ -129,10 +226,15 @@ class OrionEngine(
             }
 
             if (answer.isEmpty()) {
-                answer = if (groqKey.isEmpty() && geminiKey.isEmpty()) {
-                    "Ankit boss, KEYS button par click karke Groq API key aur ElevenLabs key save kar lijiye."
-                } else {
-                    "Haan Ankit bhai, bataiye kya kaam karna hai, main sun raha hoon."
+                answer = when {
+                    groqKey.isEmpty() && geminiKey.isEmpty() -> 
+                        "Ankit bhai, KEYS button par click karke Groq ya Gemini API key enter kar dijiye."
+                    prompt.contains("naam") -> 
+                        "Mera naam Orion hai bhai. Main aapka personal sentinel AI assistant hoon."
+                    prompt.contains("kaise ho") -> 
+                        "Main bilkul badhiya hoon Ankit bhai! Aap bataiye aaj phone par kya task execute karna hai?"
+                    else -> 
+                        "Bilkul Ankit bhai, main samajh gaya. Bataiye aage kya control execute karna hai?"
                 }
             }
 
@@ -143,6 +245,7 @@ class OrionEngine(
             }
         }.start()
     }
+
     private fun callGroq(prompt: String, key: String): String {
         return try {
             val url = URL("https://api.groq.com/openai/v1/chat/completions")
@@ -150,30 +253,27 @@ class OrionEngine(
                 requestMethod = "POST"
                 setRequestProperty("Authorization", "Bearer $key")
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                setRequestProperty("Accept", "application/json")
-                setRequestProperty("User-Agent", "Mozilla/5.0")
-                connectTimeout = 12000
-                readTimeout = 15000
+                setRequestProperty("User-Agent", "ORION/1.0")
+                connectTimeout = 10000
+                readTimeout = 12000
                 doOutput = true
                 doInput = true
             }
-
-            val systemInstruction = "Aapka naam ORION hai. Aap Ankit ke personal, smart aur loyal assistant ho. Ekdum natural, saaf, confident Hindi ya Hinglish me baat karo jaise ek mature dost ya right-hand man baat karta hai. Kisi robot ya sentinel jaisa faltu formality mat karo. Jo poocha jaye uska seedha, badiya aur emotion ke sath answer do. Totle ya ajeeb shabdon ka use bilkul mat karo."
 
             val body = JSONObject().apply {
                 put("model", "llama-3.3-70b-versatile")
                 put("messages", JSONArray().apply {
                     put(JSONObject().apply {
                         put("role", "system")
-                        put("content", systemInstruction)
+                        put("content", "Tumhara naam ORION hai. Tum Ankit ke loyal aur sharp Android AI assistant ho. Seedha natural Hindi/Hinglish me answer do. Har bar ek hi baat repeat mat karo. Bilkul dynamic aur sensible jawab do.")
                     })
                     put(JSONObject().apply {
                         put("role", "user")
                         put("content", prompt)
                     })
                 })
-                put("temperature", 0.6)
-                put("max_tokens", 350)
+                put("temperature", 0.7)
+                put("max_tokens", 300)
             }
 
             OutputStreamWriter(conn.outputStream, "UTF-8").use {
@@ -198,8 +298,8 @@ class OrionEngine(
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                connectTimeout = 12000
-                readTimeout = 15000
+                connectTimeout = 10000
+                readTimeout = 12000
                 doOutput = true
                 doInput = true
             }
@@ -208,7 +308,7 @@ class OrionEngine(
                 put("contents", JSONArray().apply {
                     put(JSONObject().apply {
                         put("parts", JSONArray().apply {
-                            put(JSONObject().apply { put("text", "You are Orion, loyal assistant to Ankit. Answer in clean Hindi naturally: $prompt") })
+                            put(JSONObject().apply { put("text", "You are Orion, assistant to Ankit. Reply naturally in Hindi: $prompt") })
                         })
                     })
                 })
@@ -233,7 +333,6 @@ class OrionEngine(
     }
 
     fun speak(text: String) {
-        // Text clean karo taaki ElevenLabs atke nahi
         val cleanText = text.replace(Regex("[*#_`~]"), "").trim()
         val prefs = context.getSharedPreferences("orion_config", Context.MODE_PRIVATE)
         val elevenKey = prefs.getString("elevenlabs_key", "")?.trim() ?: ""
