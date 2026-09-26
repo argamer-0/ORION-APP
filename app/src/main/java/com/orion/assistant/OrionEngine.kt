@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.ContactsContract
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -19,6 +20,7 @@ import org.json.JSONObject
 import java.io.*
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 import java.util.Locale
 
 class OrionEngine(
@@ -37,9 +39,7 @@ class OrionEngine(
     init {
         tts = TextToSpeech(context, this)
         tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) {
-                isSpeakingNow = true
-            }
+            override fun onStart(utteranceId: String?) { isSpeakingNow = true }
             override fun onDone(utteranceId: String?) {
                 isSpeakingNow = false
                 if (isContinuousMode) mainHandler.postDelayed({ startListening() }, 600)
@@ -112,92 +112,152 @@ class OrionEngine(
     private fun handleCommandOrQuery(prompt: String) {
         val lower = prompt.lowercase(Locale.ROOT)
 
-        // --- DIRECT DEVICE CONTROL COMMANDS ---
-        if (lower.contains("youtube") || lower.contains("यूट्यूब") || lower.contains("युटुब")) {
-            executeAppLaunch("com.google.android.youtube", "YouTube open kar raha hoon Ankit bhai.")
-            return
-        }
-
-        if (lower.contains("camera") || lower.contains("कैमरा")) {
+        // 1. YouTube Song & Video Search / Play
+        if (lower.contains("youtube") || lower.contains("यूट्यूब") || lower.contains("गाना") || lower.contains("song")) {
+            val query = prompt.replace(Regex("(?i)youtube|यूट्यूब|open|chalao|bajao|laga do|song|gana|kholo|play"), "").trim()
+            val searchQuery = if (query.isEmpty()) "latest trending songs" else query
             try {
-                val intent = Intent("android.media.action.IMAGE_CAPTURE").apply {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + URLEncoder.encode(searchQuery, "UTF-8"))).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
                 context.startActivity(intent)
-                replyImmediate("Camera open kar diya hai boss.")
+                replyImmediate("YouTube par $searchQuery chala rahi hoon Ankit.")
             } catch (_: Exception) {
-                replyImmediate("Camera start nahi ho paya boss.")
+                launchAppByIntent("com.google.android.youtube", "YouTube open kar diya hai Ankit.")
             }
             return
         }
 
+        // 2. WhatsApp Auto Search & Auto Send
         if (lower.contains("whatsapp") || lower.contains("व्हाट्सएप")) {
-            executeAppLaunch("com.whatsapp", "WhatsApp open kar raha hoon.")
+            if (lower.contains("message") || lower.contains("भेजो") || lower.contains("bhejo") || lower.contains("send")) {
+                handleWhatsAppAutoSend(prompt)
+            } else {
+                launchAppByIntent("com.whatsapp", "WhatsApp open kar diya hai Ankit.")
+            }
             return
         }
 
-        if (lower.contains("instagram") || lower.contains("इंस्टाग्राम")) {
-            executeAppLaunch("com.instagram.android", "Instagram open kar raha hoon.")
+        // 3. Camera
+        if (lower.contains("camera") || lower.contains("कैमरा") || lower.contains("photo khincho")) {
+            try {
+                val intent = Intent("android.media.action.IMAGE_CAPTURE").apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+                context.startActivity(intent)
+                replyImmediate("Camera open kar diya hai Ankit, smile karo!")
+            } catch (_: Exception) {
+                replyImmediate("Camera access nahi ho paya.")
+            }
             return
         }
 
+        // 4. Free Fire & Games
         if (lower.contains("free fire") || lower.contains("फ्री फायर")) {
-            executeAppLaunch("com.dts.freefiremax", "Free Fire MAX launch kar raha hoon bhai.")
+            val ffLaunched = launchAppByIntent("com.dts.freefiremax", "Free Fire MAX start ho raha hai, aaj booyah karna hai!")
+            if (!ffLaunched) launchAppByIntent("com.dts.freefireth", "Free Fire start ho raha hai!")
             return
         }
 
-        if (lower.contains("chrome") || lower.contains("क्रोम") || lower.contains("browser")) {
-            executeAppLaunch("com.android.chrome", "Chrome browser open kar raha hoon.")
+        // 5. Chrome & Web Search / Downloader
+        if (lower.contains("chrome") || lower.contains("website") || lower.contains("rotate") || lower.contains("download") || lower.contains("डाउनलोड")) {
+            val webQuery = prompt.replace(Regex("(?i)chrome|open|kholo|browser|pe jao"), "").trim()
+            val targetUrl = if (webQuery.startsWith("http")) webQuery else "https://www.google.com/search?q=" + URLEncoder.encode(webQuery, "UTF-8")
+            try {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl)).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+                context.startActivity(intent)
+                replyImmediate("Google Chrome par search open kar diya hai.")
+            } catch (_: Exception) {
+                launchAppByIntent("com.android.chrome", "Chrome open kar diya hai.")
+            }
             return
         }
 
-        if (lower.contains("flashlight on") || lower.contains("टॉर्च जलाओ") || lower.contains("torch on")) {
-            toggleFlashlight(true)
+        // 6. Flashlight
+        if (lower.contains("torch") || lower.contains("flashlight") || lower.contains("टॉर्च")) {
+            val turnOn = !lower.contains("off") && !lower.contains("band")
+            toggleFlashlight(turnOn)
             return
         }
 
-        if (lower.contains("flashlight off") || lower.contains("टॉर्च बंद") || lower.contains("torch off")) {
-            toggleFlashlight(false)
-            return
+        // 7. Dynamic App Launcher for any other app mentioned
+        if (lower.contains("open") || lower.contains("kholo") || lower.contains("chalao")) {
+            val appWord = prompt.replace(Regex("(?i)open|kholo|chalao|khol|app|karo"), "").trim()
+            if (appWord.isNotEmpty() && launchAnyAppByName(appWord)) {
+                return
+            }
         }
 
-        if (lower.contains("volume full") || lower.contains("आवाज बढ़ाओ") || lower.contains("volume up")) {
-            val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-            audio.setStreamVolume(AudioManager.STREAM_MUSIC, audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC), AudioManager.FLAG_SHOW_UI)
-            replyImmediate("Media volume full kar diya hai boss.")
-            return
-        }
-
-        // --- IF GENERAL QUESTION: ROUTE TO DYNAMIC AI ---
+        // 8. General AI Conversation with sweet emotional intelligence
         onStatus("THINKING...")
         queryAI(prompt)
     }
 
-    private fun executeAppLaunch(pkg: String, responseText: String) {
+    private fun handleWhatsAppAutoSend(fullPrompt: String) {
+        try {
+            OrionAutomationService.shouldAutoSendWhatsApp = true
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                data = Uri.parse("https://api.whatsapp.com/send?text=" + URLEncoder.encode(fullPrompt, "UTF-8"))
+                setPackage("com.whatsapp")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            replyImmediate("WhatsApp message prepare kar diya hai, send ho raha hai.")
+        } catch (_: Exception) {
+            launchAppByIntent("com.whatsapp", "WhatsApp open kar diya hai.")
+        }
+    }
+
+    private fun launchAnyAppByName(appName: String): Boolean {
         try {
             val pm = context.packageManager
-            val intent = pm.getLaunchIntentForPackage(pkg)?.apply {
+            val packages = pm.getInstalledApplications(0)
+            for (app in packages) {
+                val label = pm.getApplicationLabel(app).toString().lowercase(Locale.ROOT)
+                if (label.contains(appName.lowercase(Locale.ROOT))) {
+                    val intent = pm.getLaunchIntentForPackage(app.packageName)?.apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    if (intent != null) {
+                        context.startActivity(intent)
+                        replyImmediate("$label open kar diya hai Ankit!")
+                        return true
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        return false
+    }
+
+    private fun launchAppByIntent(pkg: String, successMsg: String): Boolean {
+        return try {
+            val intent = context.packageManager.getLaunchIntentForPackage(pkg)?.apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             if (intent != null) {
                 context.startActivity(intent)
-                replyImmediate(responseText)
+                replyImmediate(successMsg)
+                true
             } else {
-                replyImmediate("Boss ye app aapke phone mein installed nahi mila.")
+                // If not found locally, open in Google Play Store
+                val playIntent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$pkg")).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(playIntent)
+                replyImmediate("Ye app phone me nahi mila, Play Store par download ke liye khol diya hai.")
+                true
             }
-        } catch (e: Exception) {
-            replyImmediate("App open karne mein error aaya boss.")
+        } catch (_: Exception) {
+            replyImmediate("App open nahi ho paya Ankit.")
+            false
         }
     }
 
-    private fun toggleFlashlight(status: Boolean) {
+    private fun toggleFlashlight(on: Boolean) {
         try {
             val cam = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-            val id = cam.cameraIdList[0]
-            cam.setTorchMode(id, status)
-            replyImmediate(if (status) "Torch on kar di hai boss." else "Torch band kar di hai boss.")
+            cam.setTorchMode(cam.cameraIdList[0], on)
+            replyImmediate(if (on) "Torch on kar di hai maine!" else "Torch band kar di hai.")
         } catch (_: Exception) {
-            replyImmediate("Flashlight control nahi ho payi boss.")
+            replyImmediate("Torch control nahi ho payi.")
         }
     }
 
@@ -216,26 +276,11 @@ class OrionEngine(
             val geminiKey = prefs.getString("gemini_key", "")?.trim() ?: ""
 
             var answer = ""
-
-            if (groqKey.isNotEmpty()) {
-                answer = callGroq(prompt, groqKey)
-            }
-
-            if (answer.isEmpty() && geminiKey.isNotEmpty()) {
-                answer = callGemini(prompt, geminiKey)
-            }
+            if (groqKey.isNotEmpty()) answer = callGroq(prompt, groqKey)
+            if (answer.isEmpty() && geminiKey.isNotEmpty()) answer = callGemini(prompt, geminiKey)
 
             if (answer.isEmpty()) {
-                answer = when {
-                    groqKey.isEmpty() && geminiKey.isEmpty() -> 
-                        "Ankit bhai, KEYS button par click karke Groq ya Gemini API key enter kar dijiye."
-                    prompt.contains("naam") -> 
-                        "Mera naam Orion hai bhai. Main aapka personal sentinel AI assistant hoon."
-                    prompt.contains("kaise ho") -> 
-                        "Main bilkul badhiya hoon Ankit bhai! Aap bataiye aaj phone par kya task execute karna hai?"
-                    else -> 
-                        "Bilkul Ankit bhai, main samajh gaya. Bataiye aage kya control execute karna hai?"
-                }
+                answer = "Haan Ankit! Main tumhari har baat sun rahi hoon, batao kya mast plan hai aaj ka?"
             }
 
             mainHandler.post {
@@ -253,41 +298,35 @@ class OrionEngine(
                 requestMethod = "POST"
                 setRequestProperty("Authorization", "Bearer $key")
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                setRequestProperty("User-Agent", "ORION/1.0")
-                connectTimeout = 10000
+                setRequestProperty("User-Agent", "Mozilla/5.0")
+                connectTimeout = 12000
                 readTimeout = 12000
                 doOutput = true
-                doInput = true
             }
+
+            val systemInstruction = "Aapka naam ORION hai. Aap Ankit ki sabse pyaari, intelligent aur loyal female AI companion ho. Bilkul natural, sweet, thodi mazaakiya aur caring Hindi me baat karo jaise ek best friend ya close partner baat karti hai. Faltu kitabi ya robot jaisi batein mat karo. Ankit ko naam se bulao aur har sawaal ka crisp, friendly aur smart jawab do."
 
             val body = JSONObject().apply {
                 put("model", "llama-3.3-70b-versatile")
                 put("messages", JSONArray().apply {
                     put(JSONObject().apply {
                         put("role", "system")
-                        put("content", "Tumhara naam ORION hai. Tum Ankit ke loyal aur sharp Android AI assistant ho. Seedha natural Hindi/Hinglish me answer do. Har bar ek hi baat repeat mat karo. Bilkul dynamic aur sensible jawab do.")
+                        put("content", systemInstruction)
                     })
                     put(JSONObject().apply {
                         put("role", "user")
                         put("content", prompt)
                     })
                 })
-                put("temperature", 0.7)
+                put("temperature", 0.75)
                 put("max_tokens", 300)
             }
 
-            OutputStreamWriter(conn.outputStream, "UTF-8").use {
-                it.write(body.toString())
-                it.flush()
-            }
+            OutputStreamWriter(conn.outputStream, "UTF-8").use { it.write(body.toString()); it.flush() }
 
-            if (conn.responseCode == HttpURLConnection.HTTP_OK) {
+            if (conn.responseCode == 200) {
                 val res = conn.inputStream.bufferedReader().use { it.readText() }
-                JSONObject(res).getJSONArray("choices")
-                    .getJSONObject(0)
-                    .getJSONObject("message")
-                    .getString("content")
-                    .trim()
+                JSONObject(res).getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content").trim()
             } else ""
         } catch (_: Exception) { "" }
     }
@@ -298,36 +337,26 @@ class OrionEngine(
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                connectTimeout = 10000
+                connectTimeout = 12000
                 readTimeout = 12000
                 doOutput = true
-                doInput = true
             }
 
             val body = JSONObject().apply {
                 put("contents", JSONArray().apply {
                     put(JSONObject().apply {
                         put("parts", JSONArray().apply {
-                            put(JSONObject().apply { put("text", "You are Orion, assistant to Ankit. Reply naturally in Hindi: $prompt") })
+                            put(JSONObject().apply { put("text", "You are Orion, an affectionate smart Hindi female AI friend for Ankit. Reply naturally: $prompt") })
                         })
                     })
                 })
             }
 
-            OutputStreamWriter(conn.outputStream, "UTF-8").use {
-                it.write(body.toString())
-                it.flush()
-            }
+            OutputStreamWriter(conn.outputStream, "UTF-8").use { it.write(body.toString()); it.flush() }
 
             if (conn.responseCode == 200) {
                 val res = conn.inputStream.bufferedReader().use { it.readText() }
-                JSONObject(res).getJSONArray("candidates")
-                    .getJSONObject(0)
-                    .getJSONObject("content")
-                    .getJSONArray("parts")
-                    .getJSONObject(0)
-                    .getString("text")
-                    .trim()
+                JSONObject(res).getJSONArray("candidates").getJSONObject(0).getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text").trim()
             } else ""
         } catch (_: Exception) { "" }
     }
@@ -336,7 +365,8 @@ class OrionEngine(
         val cleanText = text.replace(Regex("[*#_`~]"), "").trim()
         val prefs = context.getSharedPreferences("orion_config", Context.MODE_PRIVATE)
         val elevenKey = prefs.getString("elevenlabs_key", "")?.trim() ?: ""
-        val voiceId = prefs.getString("elevenlabs_voice_id", "pNInz6obpgDQGcFmaJgB")?.trim() ?: "pNInz6obpgDQGcFmaJgB"
+        // Default: EXAVITQu4vr4xnSDxMaL (Bella - Sweet Hindi/Multilingual Natural Female)
+        val voiceId = prefs.getString("elevenlabs_voice_id", "EXAVITQu4vr4xnSDxMaL")?.trim() ?: "EXAVITQu4vr4xnSDxMaL"
 
         isSpeakingNow = true
         speechRecognizer?.stopListening()
@@ -344,9 +374,7 @@ class OrionEngine(
         if (elevenKey.isNotEmpty()) {
             Thread {
                 val success = streamElevenLabsVoice(cleanText, elevenKey, voiceId)
-                if (!success) {
-                    mainHandler.post { speakOfflineTts(cleanText) }
-                }
+                if (!success) mainHandler.post { speakOfflineTts(cleanText) }
             }.start()
         } else {
             speakOfflineTts(cleanText)
@@ -372,21 +400,16 @@ class OrionEngine(
                 put("voice_settings", JSONObject().apply {
                     put("stability", 0.40)
                     put("similarity_boost", 0.85)
-                    put("style", 0.30)
+                    put("style", 0.35)
                     put("use_speaker_boost", true)
                 })
             }
 
-            OutputStreamWriter(conn.outputStream, "UTF-8").use {
-                it.write(json.toString())
-                it.flush()
-            }
+            OutputStreamWriter(conn.outputStream, "UTF-8").use { it.write(json.toString()); it.flush() }
 
             if (conn.responseCode == 200) {
-                val tempMp3 = File.createTempFile("orion_voice", ".mp3", context.cacheDir)
-                FileOutputStream(tempMp3).use { fos ->
-                    conn.inputStream.copyTo(fos)
-                }
+                val tempMp3 = File.createTempFile("orion_f_voice", ".mp3", context.cacheDir)
+                FileOutputStream(tempMp3).use { fos -> conn.inputStream.copyTo(fos) }
 
                 mainHandler.post {
                     try {
@@ -399,9 +422,7 @@ class OrionEngine(
                                 tempMp3.delete()
                                 isSpeakingNow = false
                                 onStatus("STANDBY")
-                                if (isContinuousMode) {
-                                    mainHandler.postDelayed({ startListening() }, 500)
-                                }
+                                if (isContinuousMode) mainHandler.postDelayed({ startListening() }, 500)
                             }
                         }
                     } catch (_: Exception) {
@@ -414,7 +435,7 @@ class OrionEngine(
                 isSpeakingNow = false
                 false
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             isSpeakingNow = false
             false
         }
@@ -427,8 +448,8 @@ class OrionEngine(
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             tts?.language = Locale("hi", "IN")
-            tts?.setPitch(0.70f)
-            tts?.setSpeechRate(0.95f)
+            tts?.setPitch(1.15f)
+            tts?.setSpeechRate(1.0f)
         }
     }
 
