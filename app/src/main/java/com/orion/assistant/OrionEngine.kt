@@ -138,102 +138,58 @@ class OrionEngine(
     }
 
     private fun callGeminiAPI(prompt: String, key: String): String {
-        // Safe Model Endpoints
-        val models = arrayOf("gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro")
-        val sys = "Aapka naam ORION hai. Aap Ankit Boss ki behad pyaari, intelligent aur chulbuli Hindi female friend ho. Hamesha unhe 'Ankit boss' kaho. Real ladki ki tarah natural Hindi me baat karo. Har sawal ka naya aur dynamic jawab do, koi line repeat mat karna. Agar gana chalane ko bole toh text me '[action:play_youtube:song_name]' lagao. WhatsApp ke liye '[action:open_whatsapp]', Camera ke liye '[action:open_camera]', Torch ke liye '[action:torch_on]', Volume full ke liye '[action:volume_full]' lagao."
+        val models = arrayOf("gemini-1.5-flash", "gemini-2.0-flash", "gemini-pro")
+        var lastDiagnosticError = "NO_ATTEMPT"
 
-        val json = JSONObject().apply {
+        val jsonBody = JSONObject().apply {
             put("contents", JSONArray().apply {
                 put(JSONObject().apply {
                     put("parts", JSONArray().apply {
-                        put(JSONObject().apply { put("text", "$sys\nAnkit Boss: $prompt") })
+                        put(JSONObject().apply { put("text", prompt) })
                     })
                 })
             })
-        }
+        }.toString()
 
         for (m in models) {
+            val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent?key=$key"
             try {
-                val url = URL("https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent?key=$key")
+                val url = URL(endpoint)
                 val conn = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                    connectTimeout = 10000
-                    readTimeout = 12000
+                    connectTimeout = 12000
+                    readTimeout = 15000
                     doOutput = true
                     doInput = true
                 }
 
                 OutputStreamWriter(conn.outputStream, "UTF-8").use {
-                    it.write(json.toString())
+                    it.write(jsonBody)
                     it.flush()
                 }
 
-                if (conn.responseCode == 200) {
+                val code = conn.responseCode
+                if (code == 200) {
                     val reader = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8"))
                     val res = reader.readText()
                     reader.close()
                     val cand = JSONObject(res).getJSONArray("candidates").getJSONObject(0)
                     val text = cand.getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text").trim()
                     if (text.isNotEmpty()) return text
+                } else {
+                    val errStream = conn.errorStream ?: conn.inputStream
+                    val errResponse = errStream?.bufferedReader()?.use { it.readText() } ?: "Empty error stream"
+                    lastDiagnosticError = "[HTTP $code on $m]: $errResponse"
+                    android.util.Log.e("ORION_DIAG", lastDiagnosticError)
                 }
-            } catch (_: Exception) {}
-        }
-        return "Ankit boss, internet slow lag raha hai ya Google connect nahi ho pa raha hai!"
-    }
-
-    private fun executeAction(text: String) {
-        val lower = text.lowercase(Locale.ROOT)
-        if (lower.contains("[action:play_youtube]")) {
-            val q = extractParam(text, "play_youtube")
-            try {
-                val intent = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).apply {
-                    putExtra(SearchManager.QUERY, q)
-                    setPackage("com.google.android.youtube")
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(intent)
-            } catch (_: Exception) {
-                val web = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + URLEncoder.encode(q, "UTF-8"))).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(web)
+            } catch (e: Exception) {
+                lastDiagnosticError = "[NETWORK/SSL Exception on $m]: ${e.javaClass.simpleName} - ${e.message}"
+                android.util.Log.e("ORION_DIAG", lastDiagnosticError, e)
             }
-        } else if (lower.contains("[action:open_whatsapp]")) {
-            launchApp("com.whatsapp")
-        } else if (lower.contains("[action:open_camera]")) {
-            val intent = Intent("android.media.action.IMAGE_CAPTURE").apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
-            context.startActivity(intent)
-        } else if (lower.contains("[action:torch_on]")) {
-            setTorch(true)
-        } else if (lower.contains("[action:torch_off]")) {
-            setTorch(false)
-        } else if (lower.contains("[action:volume_full]")) {
-            val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-            am.setStreamVolume(AudioManager.STREAM_MUSIC, am.getStreamMaxVolume(AudioManager.STREAM_MUSIC), AudioManager.FLAG_SHOW_UI)
         }
-    }
-
-    private fun extractParam(text: String, tag: String): String {
-        return try {
-            val s = text.indexOf("[$tag:") + tag.length + 2
-            val e = text.indexOf("]", s)
-            if (s != -1 && e != -1) text.substring(s, e) else "trending song"
-        } catch (_: Exception) { "trending song" }
-    }
-
-    private fun launchApp(pkg: String) {
-        try {
-            val intent = context.packageManager.getLaunchIntentForPackage(pkg)?.apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
-            if (intent != null) context.startActivity(intent)
-        } catch (_: Exception) {}
-    }
-
-    private fun setTorch(on: Boolean) {
-        try {
-            val cam = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-            cam.setTorchMode(cam.cameraIdList[0], on)
-        } catch (_: Exception) {}
+        // Generic message band, exact diagnostic return karo
+        return "DEBUG_ERROR: $lastDiagnosticError"
     }
 
     fun speak(text: String) {
