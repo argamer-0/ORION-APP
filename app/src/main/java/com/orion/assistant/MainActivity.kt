@@ -72,7 +72,7 @@ class MainActivity : Activity() {
         topBar.addView(tvTitle)
 
         val btnKeyConfig = TextView(this).apply {
-            text = "🔑 KEYS"
+            text = "🔑 GEMINI KEY"
             setTextColor(Color.parseColor("#76FF03"))
             textSize = 12f
             typeface = Typeface.DEFAULT_BOLD
@@ -82,7 +82,7 @@ class MainActivity : Activity() {
                 setColor(Color.parseColor("#142236"))
                 setStroke(2, Color.parseColor("#76FF03"))
             }
-            setOnClickListener { showGeminiKeyDialog() }
+            setOnClickListener { showGeminiDialog() }
         }
         topBar.addView(btnKeyConfig)
         baseLinear.addView(topBar)
@@ -209,6 +209,7 @@ class MainActivity : Activity() {
 
         mainContent.addView(baseLinear)
         root.addView(mainContent)
+
         drawerLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.parseColor("#0A0F1D"))
@@ -246,12 +247,12 @@ class MainActivity : Activity() {
         }
 
         val callGranted = ContextCompat.checkSelfPermission(this, android.Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
-        addPermissionCard(drawerContent, "Phone Call State (CALL & STATE)", "Emergency auto-dial aur scam protection.", callGranted) {
+        addPermissionCard(drawerContent, "Phone Call State (CALL & STATE)", "Emergency auto-dial aur protection.", callGranted) {
             ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.CALL_PHONE, android.Manifest.permission.READ_PHONE_STATE), 103)
         }
 
         val smsGranted = ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
-        addPermissionCard(drawerContent, "SMS Access (READ & RECEIVE)", "OTP read, fraud check aur reply ke liye.", smsGranted) {
+        addPermissionCard(drawerContent, "SMS Access (READ & RECEIVE)", "OTP read aur auto actions ke liye.", smsGranted) {
             ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.READ_SMS, android.Manifest.permission.RECEIVE_SMS, android.Manifest.permission.SEND_SMS), 104)
         }
 
@@ -261,7 +262,7 @@ class MainActivity : Activity() {
         }
 
         val locGranted = ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        addPermissionCard(drawerContent, "Location (FINE & COARSE)", "Real-time navigation alerts ke liye.", locGranted) {
+        addPermissionCard(drawerContent, "Location (FINE & COARSE)", "Real-time navigation ke liye.", locGranted) {
             ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION), 106)
         }
 
@@ -282,7 +283,7 @@ class MainActivity : Activity() {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
 
-        addPermissionCard(drawerContent, "Battery Optimization Exemption", "Background me service hamesha chalne ke liye.", true) {
+        addPermissionCard(drawerContent, "Battery Optimization Exemption", "Background me service hamesha active rehne ke liye.", true) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
             }
@@ -395,48 +396,31 @@ class MainActivity : Activity() {
         chatScroll.post { chatScroll.fullScroll(View.FOCUS_DOWN) }
     }
 
-    private fun showGeminiKeyDialog() {
+    private fun showGeminiDialog() {
         val prefs = getSharedPreferences("orion_config", Context.MODE_PRIVATE)
-        val curGemini = prefs.getString("gemini_key", "") ?: ""
-        val curEleven = prefs.getString("elevenlabs_key", "") ?: ""
-        val curVoiceId = prefs.getString("elevenlabs_voice_id", "EXAVITQu4vr4xnSDxMaL") ?: "EXAVITQu4vr4xnSDxMaL"
+        val curKey = prefs.getString("gemini_key", "") ?: ""
 
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(50, 40, 50, 20)
         }
 
-        val etGemini = EditText(this).apply {
+        val etKey = EditText(this).apply {
             hint = "Google Gemini API Key (AIzaSy...)"
-            setText(curGemini)
-        }
-        val etEleven = EditText(this).apply {
-            hint = "ElevenLabs API Key"
-            setText(curEleven)
-        }
-        val etVoiceId = EditText(this).apply {
-            hint = "Voice ID (Default: Bella Sweet Female)"
-            setText(curVoiceId)
+            setText(curKey)
         }
 
-        layout.addView(TextView(this).apply { text = "1. Google Gemini API Key (Smart Brain):"; textSize = 12f; setTextColor(Color.CYAN) })
-        layout.addView(etGemini)
-        layout.addView(TextView(this).apply { text = "\n2. ElevenLabs Key (Sweet Female Voice):"; textSize = 12f; setTextColor(Color.GREEN) })
-        layout.addView(etEleven)
-        layout.addView(TextView(this).apply { text = "Voice ID (EXAVITQu4vr4xnSDxMaL = Bella Hindi):"; textSize = 11f; setTextColor(Color.GRAY) })
-        layout.addView(etVoiceId)
+        layout.addView(TextView(this).apply { text = "Google Gemini API Key:"; textSize = 13f; setTextColor(Color.CYAN) })
+        layout.addView(etKey)
 
         AlertDialog.Builder(this)
-            .setTitle("ORION AI & Voice Setup")
+            .setTitle("Gemini Brain Setup")
             .setView(layout)
-            .setPositiveButton("Save Config") { _, _ ->
-                prefs.edit()
-                    .putString("gemini_key", etGemini.text.toString().trim())
-                    .putString("elevenlabs_key", etEleven.text.toString().trim())
-                    .putString("elevenlabs_voice_id", etVoiceId.text.toString().trim())
-                    .apply()
-                Toast.makeText(this, "Gemini & Female Voice Saved!", Toast.LENGTH_SHORT).show()
-                engine?.speak("Haan Ankit! Ab main poori tarah tumhare sath tayar hoon, batao kya mast karna hai aaj?")
+            .setPositiveButton("Save Key") { _, _ ->
+                val k = etKey.text.toString().trim()
+                prefs.edit().putString("gemini_key", k).apply()
+                Toast.makeText(this, "Gemini Key Saved!", Toast.LENGTH_SHORT).show()
+                engine?.speak("Hello Ankit boss! Main aapki female AI assistant Orion hoon. Ab hum dono mast batein karenge, hukum kijiye!")
             }
             .setNegativeButton("Cancel", null)
             .show()
