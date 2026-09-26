@@ -9,34 +9,50 @@ import android.view.animation.LinearInterpolator
 class OrionArcOrbView(context: Context) : View(context) {
     private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = 8f
+        strokeWidth = 6f
+        color = Color.parseColor("#1B2A4A")
+    }
+    private val arcCyan = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 14f
+        strokeCap = Paint.Cap.ROUND
         color = Color.parseColor("#00E5FF")
     }
-    private val arcPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = 16f
-        color = Color.parseColor("#76FF03")
-    }
-    private val magentaArcPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    private val arcGreen = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = 10f
-        color = Color.parseColor("#FF007F")
+        strokeCap = Paint.Cap.ROUND
+        color = Color.parseColor("#76FF03")
+    }
+    private val arcWhite = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 8f
+        strokeCap = Paint.Cap.ROUND
+        color = Color.WHITE
     }
     private val corePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
-        color = Color.parseColor("#0A1224")
+        color = Color.parseColor("#080D1A")
+    }
+    private val watermarkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#1500E5FF")
+        textSize = 72f
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
     }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        textSize = 40f
+        textSize = 34f
         textAlign = Paint.Align.CENTER
-        typeface = Typeface.DEFAULT_BOLD
+        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+        letterSpacing = 0.25f
     }
     private val subTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#00E5FF")
-        textSize = 18f
+        textSize = 14f
         textAlign = Paint.Align.CENTER
         typeface = Typeface.MONOSPACE
+        letterSpacing = 0.15f
     }
 
     private var rotationAngle = 0f
@@ -44,7 +60,7 @@ class OrionArcOrbView(context: Context) : View(context) {
 
     init {
         ValueAnimator.ofFloat(0f, 360f).apply {
-            duration = 3000
+            duration = 4000
             repeatCount = ValueAnimator.INFINITE
             interpolator = LinearInterpolator()
             addUpdateListener {
@@ -62,15 +78,21 @@ class OrionArcOrbView(context: Context) : View(context) {
         val radius = (Math.min(width, height) / 2f) - 25f
         if (radius <= 0) return
 
-        canvas.drawCircle(cx, cy, radius - 15f, corePaint)
+        // 1. Watermark background text
+        canvas.drawText("O R I O N", cx, cy + 25f, watermarkPaint)
+
+        // 2. Core inner ring
+        canvas.drawCircle(cx, cy, radius - 16f, corePaint)
         canvas.drawCircle(cx, cy, radius, ringPaint)
 
+        // 3. Maya style rotating orbital arcs
         rect.set(cx - radius, cy - radius, cx + radius, cy + radius)
-        canvas.drawArc(rect, rotationAngle, 100f, false, arcPaint)
-        canvas.drawArc(rect, rotationAngle + 180f, 100f, false, arcPaint)
-        canvas.drawArc(rect, -rotationAngle, 60f, false, magentaArcPaint)
+        canvas.drawArc(rect, rotationAngle, 110f, false, arcCyan)
+        canvas.drawArc(rect, rotationAngle + 180f, 80f, false, arcGreen)
+        canvas.drawArc(rect, -rotationAngle * 1.5f, 50f, false, arcWhite)
 
-        canvas.drawText("O R I O N", cx, cy + 5f, textPaint)
-        canvas.drawText("CORE ACTIVE", cx, cy + 45f, subTextPaint)
+        // 4. Center Titles
+        canvas.drawText("O · R · I · O · N", cx, cy + 2f, textPaint)
+        canvas.drawText("AI SENTINEL // ACTIVE", cx, cy + 34f, subTextPaint)
     }
 }
