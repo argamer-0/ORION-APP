@@ -24,7 +24,6 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.util.Locale
-import kotlin.random.Random
 
 class OrionEngine(
     private val context: Context,
@@ -38,40 +37,20 @@ class OrionEngine(
     private var isSpeakingNow = false
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    private val idleCheckRunnable = object : Runnable {
-        override fun run() {
-            if (isContinuousMode && !isSpeakingNow) {
-                val funnyLines = arrayOf(
-                    "Arey Ankit boss! Itna sannata kyun hai? Kuch boliye na, main bore ho rahi hoon!",
-                    "Kya hua boss, mujhse naraz ho kya? Kuch bolte kyun nahi?",
-                    "Sun rahe ho na Ankit boss? Chup-chap mat baitho, hukum kijiye!"
-                )
-                replyImmediate(funnyLines[Random.nextInt(funnyLines.size)])
-            }
-            resetIdleTimer()
-        }
-    }
-
     init {
         tts = TextToSpeech(context, this)
         tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) { isSpeakingNow = true }
-            override fun onDone(utteranceId: String?) {
+            override fun onStart(id: String?) { isSpeakingNow = true }
+            override fun onDone(id: String?) {
                 isSpeakingNow = false
                 if (isContinuousMode) mainHandler.postDelayed({ startListening() }, 500)
             }
-            override fun onError(utteranceId: String?) {
+            override fun onError(id: String?) {
                 isSpeakingNow = false
                 if (isContinuousMode) mainHandler.postDelayed({ startListening() }, 700)
             }
         })
         initRecognizer()
-        resetIdleTimer()
-    }
-
-    private fun resetIdleTimer() {
-        mainHandler.removeCallbacks(idleCheckRunnable)
-        mainHandler.postDelayed(idleCheckRunnable, 50000)
     }
 
     private fun initRecognizer() {
@@ -109,7 +88,6 @@ class OrionEngine(
     fun stopListening() {
         isContinuousMode = false
         isSpeakingNow = false
-        mainHandler.removeCallbacks(idleCheckRunnable)
         mainHandler.post {
             try {
                 speechRecognizer?.stopListening()
@@ -120,7 +98,6 @@ class OrionEngine(
     }
 
     override fun onResults(results: Bundle?) {
-        resetIdleTimer()
         if (isSpeakingNow) return
         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
         val text = matches?.firstOrNull()?.trim() ?: ""
@@ -132,143 +109,52 @@ class OrionEngine(
             mainHandler.postDelayed({ startListening() }, 400)
         }
     }
-    private fun executeActionIfRequired(aiResponse: String) {
-        val lower = aiResponse.lowercase(Locale.ROOT)
 
-        if (lower.contains("[action:play_youtube]") || lower.contains("[action:youtube]")) {
-            val songName = extractActionParam(aiResponse, "play_youtube")
-            playYouTubeSong(songName)
-        } else if (lower.contains("[action:open_whatsapp]")) {
-            launchTargetApp("com.whatsapp")
-        } else if (lower.contains("[action:open_camera]")) {
-            openCamera()
-        } else if (lower.contains("[action:open_chrome]")) {
-            launchTargetApp("com.android.chrome")
-        } else if (lower.contains("[action:open_freefire]")) {
-            val ff = launchTargetApp("com.dts.freefiremax")
-            if (!ff) launchTargetApp("com.dts.freefireth")
-        } else if (lower.contains("[action:torch_on]")) {
-            setTorch(true)
-        } else if (lower.contains("[action:torch_off]")) {
-            setTorch(false)
-        } else if (lower.contains("[action:volume_full]")) {
-            maximizeVolume()
-        }
-    }
-
-    private fun extractActionParam(text: String, tag: String): String {
-        return try {
-            val start = text.indexOf("[$tag:") + tag.length + 2
-            val end = text.indexOf("]", start)
-            if (start != -1 && end != -1) text.substring(start, end) else "trending song"
-        } catch (_: Exception) {
-            "trending song"
-        }
-    }
-
-    private fun playYouTubeSong(query: String) {
-        try {
-            val intent = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).apply {
-                putExtra(SearchManager.QUERY, query)
-                setPackage("com.google.android.youtube")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(intent)
-        } catch (_: Exception) {
-            val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + URLEncoder.encode(query, "UTF-8"))).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(webIntent)
-        }
-    }
-
-    private fun launchTargetApp(pkg: String): Boolean {
-        return try {
-            val pm = context.packageManager
-            val intent = pm.getLaunchIntentForPackage(pkg)?.apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
-            if (intent != null) {
-                context.startActivity(intent)
-                true
-            } else false
-        } catch (_: Exception) { false }
-    }
-
-    private fun openCamera() {
-        try {
-            val intent = Intent("android.media.action.IMAGE_CAPTURE").apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
-            context.startActivity(intent)
-        } catch (_: Exception) {}
-    }
-
-    private fun setTorch(status: Boolean) {
-        try {
-            val cam = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-            cam.setTorchMode(cam.cameraIdList[0], status)
-        } catch (_: Exception) {}
-    }
-
-    private fun maximizeVolume() {
-        try {
-            val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-            am.setStreamVolume(AudioManager.STREAM_MUSIC, am.getStreamMaxVolume(AudioManager.STREAM_MUSIC), AudioManager.FLAG_SHOW_UI)
-        } catch (_: Exception) {}
-    }
-
-    private fun replyImmediate(text: String) {
-        mainHandler.post {
-            onStatus("REPLYING...")
-            onMessage(text, false)
-            speak(text)
-        }
-    }
     private fun queryGemini(prompt: String) {
         Thread {
             val prefs = context.getSharedPreferences("orion_config", Context.MODE_PRIVATE)
-            val geminiKey = prefs.getString("gemini_key", "")?.trim() ?: ""
+            val key = prefs.getString("gemini_key", "")?.trim() ?: ""
 
-            if (geminiKey.isEmpty()) {
-                val noKeyMsg = "Ankit boss, KEYS button dabakar apni Gemini API key daal dijiye na!"
+            if (key.isEmpty()) {
+                val msg = "Ankit boss, KEYS par click karke Gemini key save karein!"
                 mainHandler.post {
                     onStatus("STANDBY")
-                    onMessage(noKeyMsg, false)
-                    speak(noKeyMsg)
+                    onMessage(msg, false)
+                    speak(msg)
                 }
                 return@Thread
             }
 
-            val rawResponse = callGeminiAPI(prompt, geminiKey)
+            val raw = callGeminiAPI(prompt, key)
 
             mainHandler.post {
-                val cleanSpokenText = rawResponse.replace(Regex("\\[action:[^\\]]+\\]"), "").trim()
+                val clean = raw.replace(Regex("\\[action:[^\\]]+\\]"), "").trim()
                 onStatus("REPLYING...")
-                onMessage(cleanSpokenText, false)
-                speak(cleanSpokenText)
-                executeActionIfRequired(rawResponse)
+                onMessage(clean, false)
+                speak(clean)
+                executeAction(raw)
             }
         }.start()
     }
 
     private fun callGeminiAPI(prompt: String, key: String): String {
-        val models = arrayOf("gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash")
-
-        val systemInstruction = "Aapka naam ORION hai. Aap Ankit Boss ki sabse pyaari, loyal, chulbuli, mazaakiya aur super-smart Hindi female AI companion ho. Hamesha Ankit ko 'Ankit boss' bolkar bulao. Ekdum natural ladki ki tarah Hindi aur Hinglish me baat karo jaise sach me koi baat kar rahi ho. User ka naam Ankit hai. Har sawal ka mazedaar, mazaakiya aur fresh jawab do. Agar YouTube chalane ko kahe to text me '[action:play_youtube:song_name]' aur sath me bolo ki gana chala diya boss. Agar camera, whatsapp, torch, chrome kholna ho to action tag lagao."
+        // Safe Model Endpoints
+        val models = arrayOf("gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro")
+        val sys = "Aapka naam ORION hai. Aap Ankit Boss ki behad pyaari, intelligent aur chulbuli Hindi female friend ho. Hamesha unhe 'Ankit boss' kaho. Real ladki ki tarah natural Hindi me baat karo. Har sawal ka naya aur dynamic jawab do, koi line repeat mat karna. Agar gana chalane ko bole toh text me '[action:play_youtube:song_name]' lagao. WhatsApp ke liye '[action:open_whatsapp]', Camera ke liye '[action:open_camera]', Torch ke liye '[action:torch_on]', Volume full ke liye '[action:volume_full]' lagao."
 
         val json = JSONObject().apply {
             put("contents", JSONArray().apply {
                 put(JSONObject().apply {
                     put("parts", JSONArray().apply {
-                        put(JSONObject().apply {
-                            put("text", "$systemInstruction\nAnkit Boss: $prompt")
-                        })
+                        put(JSONObject().apply { put("text", "$sys\nAnkit Boss: $prompt") })
                     })
                 })
             })
         }
 
         for (m in models) {
-            val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent?key=$key"
             try {
-                val url = URL(endpoint)
+                val url = URL("https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent?key=$key")
                 val conn = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     setRequestProperty("Content-Type", "application/json; charset=utf-8")
@@ -293,7 +179,61 @@ class OrionEngine(
                 }
             } catch (_: Exception) {}
         }
-        return "Ankit boss, internet thoda slow lag raha hai ya API key check karni padegi!"
+        return "Ankit boss, internet slow lag raha hai ya Google connect nahi ho pa raha hai!"
+    }
+
+    private fun executeAction(text: String) {
+        val lower = text.lowercase(Locale.ROOT)
+        if (lower.contains("[action:play_youtube]")) {
+            val q = extractParam(text, "play_youtube")
+            try {
+                val intent = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).apply {
+                    putExtra(SearchManager.QUERY, q)
+                    setPackage("com.google.android.youtube")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            } catch (_: Exception) {
+                val web = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + URLEncoder.encode(q, "UTF-8"))).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(web)
+            }
+        } else if (lower.contains("[action:open_whatsapp]")) {
+            launchApp("com.whatsapp")
+        } else if (lower.contains("[action:open_camera]")) {
+            val intent = Intent("android.media.action.IMAGE_CAPTURE").apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+            context.startActivity(intent)
+        } else if (lower.contains("[action:torch_on]")) {
+            setTorch(true)
+        } else if (lower.contains("[action:torch_off]")) {
+            setTorch(false)
+        } else if (lower.contains("[action:volume_full]")) {
+            val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            am.setStreamVolume(AudioManager.STREAM_MUSIC, am.getStreamMaxVolume(AudioManager.STREAM_MUSIC), AudioManager.FLAG_SHOW_UI)
+        }
+    }
+
+    private fun extractParam(text: String, tag: String): String {
+        return try {
+            val s = text.indexOf("[$tag:") + tag.length + 2
+            val e = text.indexOf("]", s)
+            if (s != -1 && e != -1) text.substring(s, e) else "trending song"
+        } catch (_: Exception) { "trending song" }
+    }
+
+    private fun launchApp(pkg: String) {
+        try {
+            val intent = context.packageManager.getLaunchIntentForPackage(pkg)?.apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+            if (intent != null) context.startActivity(intent)
+        } catch (_: Exception) {}
+    }
+
+    private fun setTorch(on: Boolean) {
+        try {
+            val cam = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+            cam.setTorchMode(cam.cameraIdList[0], on)
+        } catch (_: Exception) {}
     }
 
     fun speak(text: String) {
@@ -339,7 +279,6 @@ class OrionEngine(
     fun destroy() {
         isContinuousMode = false
         isSpeakingNow = false
-        mainHandler.removeCallbacks(idleCheckRunnable)
         speechRecognizer?.destroy()
         tts?.stop()
         tts?.shutdown()
