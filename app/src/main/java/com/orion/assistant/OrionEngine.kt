@@ -138,7 +138,7 @@ class OrionEngine(
     }
 
     private fun callGeminiAPI(prompt: String, key: String): String {
-        val modelName = "gemini-1.5-flash"
+        val modelName = "gemini-3.8-flash"
         val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$key"
 
         val systemInstruction = "Aapka naam ORION hai. Aap Ankit ke smart, natural, respectful aur friendly AI assistant ho. Natural Hindi/Hinglish me bina kisi repetition ke fresh jawab do."
