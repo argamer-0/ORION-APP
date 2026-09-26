@@ -1,15 +1,10 @@
 package com.orion.assistant
 
-import android.app.SearchManager
 import android.content.Context
 import android.content.Intent
-import android.hardware.camera2.CameraManager
-import android.media.AudioManager
-import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.provider.MediaStore
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -22,8 +17,8 @@ import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
-import java.net.URLEncoder
 import java.util.Locale
+import kotlin.random.Random
 
 class OrionEngine(
     private val context: Context,
@@ -36,6 +31,7 @@ class OrionEngine(
     var isContinuousMode = false
     private var isSpeakingNow = false
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val actionExecutor = ActionExecutor(context)
 
     init {
         tts = TextToSpeech(context, this)
@@ -104,19 +100,19 @@ class OrionEngine(
         if (text.isNotEmpty()) {
             onMessage(text, true)
             onStatus("THINKING...")
-            queryGemini(text)
+            processUserQuery(text)
         } else if (isContinuousMode) {
             mainHandler.postDelayed({ startListening() }, 400)
         }
     }
 
-    private fun queryGemini(prompt: String) {
+    private fun processUserQuery(prompt: String) {
         Thread {
             val prefs = context.getSharedPreferences("orion_config", Context.MODE_PRIVATE)
             val key = prefs.getString("gemini_key", "")?.trim() ?: ""
 
             if (key.isEmpty()) {
-                val msg = "Ankit boss, KEYS par click karke Gemini key save karein!"
+                val msg = "Boss, upar KEYS par click karke Gemini API key daal dijiye tabhi main kaam kar paungi!"
                 mainHandler.post {
                     onStatus("STANDBY")
                     onMessage(msg, false)
@@ -125,41 +121,42 @@ class OrionEngine(
                 return@Thread
             }
 
-            val raw = callGeminiAPI(prompt, key)
+            // Execute Gemini with Function Calling Tool Registry
+            val aiOutcome = executeGeminiTurn(prompt, key)
 
             mainHandler.post {
-                val clean = raw.replace(Regex("\\[action:[^\\]]+\\]"), "").trim()
                 onStatus("REPLYING...")
-                onMessage(clean, false)
-                speak(clean)
-                executeAction(raw)
+                onMessage(aiOutcome, false)
+                speak(aiOutcome)
             }
         }.start()
     }
 
-    private fun callGeminiAPI(prompt: String, key: String): String {
-        val modelName = "gemini-3.8-flash"
-        val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent"
+    private fun executeGeminiTurn(prompt: String, key: String): String {
+        // High-quota model: gemini-2.0-flash with fallback to gemini-2.5-flash
+        val models = arrayOf("gemini-2.0-flash", "gemini-2.5-flash")
+        
+        for (model in models) {
+            val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent"
+            val systemInstruction = "Aapka naam ORION hai. Aap Ankit Boss ke personal AI assistant aur dost ho. Friendly, natural aur mazaakiya Hindi/Hinglish me baat karo. Jab Ankit kisi phone action ke liye bole (jaise YouTube par gaana chalana, Chrome kholna, Free Fire kholna, camera, torch ya volume), toh text me gappe marne ke badle STRICTLY tool call function generate karo. KABHI BHI bina action execute hue jhootha mat bolna ki chala diya."
 
-        val systemInstruction = "Aapka naam ORION hai. Aap Ankit ke smart, natural, respectful aur friendly AI assistant ho. Natural Hindi/Hinglish me bina kisi repetition ke fresh jawab do."
-
-        val jsonBody = JSONObject().apply {
-            put("contents", JSONArray().apply {
-                put(JSONObject().apply {
-                    put("parts", JSONArray().apply {
-                        put(JSONObject().apply { put("text", "$systemInstruction\nUser: $prompt") })
+            val requestJson = JSONObject().apply {
+                put("contents", JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("parts", JSONArray().apply {
+                            put(JSONObject().apply { put("text", "$systemInstruction\nUser: $prompt") })
+                        })
                     })
                 })
-            })
-        }.toString()
+                put("tools", ToolRegistry.getToolsJson())
+            }
 
-        for (attempt in 1..3) {
             try {
                 val url = URL(endpoint)
                 val conn = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                    setRequestProperty("x-goog-api-key", key.trim())
+                    setRequestProperty("x-goog-api-key", key)
                     connectTimeout = 12000
                     readTimeout = 15000
                     doOutput = true
@@ -167,7 +164,7 @@ class OrionEngine(
                 }
 
                 OutputStreamWriter(conn.outputStream, "UTF-8").use {
-                    it.write(jsonBody)
+                    it.write(requestJson.toString())
                     it.flush()
                 }
 
@@ -176,34 +173,82 @@ class OrionEngine(
                     val reader = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8"))
                     val res = reader.readText()
                     reader.close()
-                    val cand = JSONObject(res).getJSONArray("candidates").getJSONObject(0)
-                    return cand.getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text").trim()
-                } else if (code == 503) {
-                    Thread.sleep(1200)
-                    continue
+
+                    val root = JSONObject(res)
+                    val candidate = root.getJSONArray("candidates").getJSONObject(0)
+                    val contentParts = candidate.getJSONObject("content").getJSONArray("parts")
+                    
+                    var spokenResponse = ""
+                    var functionCallObj: JSONObject? = null
+
+                    for (i in 0 until contentParts.length()) {
+                        val part = contentParts.getJSONObject(i)
+                        if (part.has("text")) {
+                            spokenResponse += part.getString("text") + " "
+                        }
+                        if (part.has("functionCall")) {
+                            functionCallObj = part.getJSONObject("functionCall")
+                        }
+                    }
+
+                    // REAL ACTION EXECUTION
+                    if (functionCallObj != null) {
+                        val fnName = functionCallObj.getString("name")
+                        val args = functionCallObj.optJSONObject("args") ?: JSONObject()
+                        val actionResult = dispatchRealAction(fnName, args)
+
+                        return if (actionResult.first) {
+                            if (spokenResponse.isNotBlank()) spokenResponse.trim() else "Boss, ${actionResult.second}!"
+                        } else {
+                            "Boss, action fail ho gaya: ${actionResult.second}"
+                        }
+                    }
+
+                    if (spokenResponse.isNotBlank()) {
+                        return spokenResponse.trim()
+                    }
+                } else if (code == 429) {
+                    // Safe Quota Error Handling - No fake retry loop
+                    return "Boss, Gemini API ki free tier limit abhi puri ho gayi hai (HTTP 429). Thodi der baad try karte hain!"
                 } else {
                     val errStream = conn.errorStream ?: conn.inputStream
-                    val errResponse = errStream?.bufferedReader()?.use { it.readText() } ?: "Empty error"
-                    return "[HTTP $code on $modelName]: $errResponse"
+                    val errText = errStream?.bufferedReader()?.use { it.readText() } ?: ""
+                    return "[HTTP $code on $model]: $errText"
                 }
             } catch (e: Exception) {
-                if (attempt == 3) return "[NETWORK EXCEPTION on $modelName]: ${e.javaClass.simpleName} - ${e.message}"
-                Thread.sleep(1000)
+                // Try next candidate model
             }
         }
-        return "Server busy, please try again in a moment."
+        return "Boss, internet connection me dikkat aa rahi hai, check kijiye na!"
     }
 
-    private fun executeAction(raw: String) {
-        val lower = raw.lowercase(java.util.Locale.ROOT)
-        if (lower.contains("[action:open_whatsapp]")) {
-            val intent = context.packageManager.getLaunchIntentForPackage("com.whatsapp")
-            if (intent != null) context.startActivity(intent)
-        } else if (lower.contains("[action:open_camera]")) {
-            val intent = android.content.Intent("android.media.action.IMAGE_CAPTURE").apply {
-                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+    private fun dispatchRealAction(name: String, args: JSONObject): Pair<Boolean, String> {
+        return when (name) {
+            "open_app" -> {
+                val app = args.optString("app_name", "")
+                actionExecutor.openApp(app)
             }
-            context.startActivity(intent)
+            "play_youtube" -> {
+                val q = args.optString("query", "latest songs")
+                actionExecutor.playYouTube(q)
+            }
+            "open_whatsapp" -> {
+                val c = args.optString("contact", "")
+                val m = args.optString("message", "")
+                actionExecutor.openWhatsApp(c, m)
+            }
+            "open_camera" -> {
+                actionExecutor.openCamera()
+            }
+            "toggle_torch" -> {
+                val en = args.optBoolean("enable", true)
+                actionExecutor.setTorch(en)
+            }
+            "set_volume" -> {
+                val p = args.optInt("percent", 80)
+                actionExecutor.setVolume(p)
+            }
+            else -> Pair(false, "Unknown action $name")
         }
     }
 
@@ -228,7 +273,7 @@ class OrionEngine(
                     }
                 }
             } catch (_: Exception) {}
-            tts?.setPitch(1.26f)
+            tts?.setPitch(1.22f)
             tts?.setSpeechRate(1.02f)
         }
     }
