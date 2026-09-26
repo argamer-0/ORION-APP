@@ -56,7 +56,7 @@ class OrionEngine(
                     setRecognitionListener(this@OrionEngine)
                 }
             } catch (e: Exception) {
-                onStatus("STT Init Error: ${e.message}")
+                onStatus("STT Error: ${e.message}")
             }
         }
     }
@@ -122,7 +122,7 @@ class OrionEngine(
                 answer = if (groqKey.isEmpty() && geminiKey.isEmpty()) {
                     "Ankit boss, KEYS button par click karke Groq ya Gemini API key paste karein."
                 } else {
-                    "Internet connection ya API key me issue hai boss, please check karein."
+                    "Internet connection check karein ya API key verify karein boss."
                 }
             }
 
@@ -140,7 +140,7 @@ class OrionEngine(
             conn.requestMethod = "POST"
             conn.setRequestProperty("Authorization", "Bearer $key")
             conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-            conn.setRequestProperty("User-Agent", "ORION-Android/1.0")
+            conn.setRequestProperty("User-Agent", "ORION-Agent/1.0")
             conn.connectTimeout = 20000
             conn.readTimeout = 20000
             conn.doOutput = true
@@ -150,7 +150,7 @@ class OrionEngine(
                 put("messages", JSONArray().apply {
                     put(JSONObject().apply {
                         put("role", "system")
-                        put("content", "You are ORION, an ultra-advanced male cybernetic AI assistant created for Ankit. Reply directly and naturally in Hindi/Hinglish in a sharp, respectful, robotic style.")
+                        put("content", "You are ORION, an ultra-advanced cybernetic AI created for Ankit. Respond in sharp, direct, respectful Hindi/Hinglish.")
                     })
                     put(JSONObject().apply {
                         put("role", "user")
@@ -169,9 +169,7 @@ class OrionEngine(
                 val res = reader.readText()
                 reader.close()
                 JSONObject(res).getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")
-            } else {
-                ""
-            }
+            } else ""
         } catch (_: Exception) { "" }
     }
 
@@ -181,7 +179,7 @@ class OrionEngine(
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-            conn.setRequestProperty("User-Agent", "ORION-Android/1.0")
+            conn.setRequestProperty("User-Agent", "ORION-Agent/1.0")
             conn.connectTimeout = 20000
             conn.readTimeout = 20000
             conn.doOutput = true
@@ -217,9 +215,9 @@ class OrionEngine(
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             tts?.language = Locale("hi", "IN")
-            // Male Heavy Robotic Tone setup
-            tts?.setPitch(0.85f)
-            tts?.setSpeechRate(1.05f)
+            // Male Heavy Robotic Tone
+            tts?.setPitch(0.70f)
+            tts?.setSpeechRate(1.0f)
         }
     }
 

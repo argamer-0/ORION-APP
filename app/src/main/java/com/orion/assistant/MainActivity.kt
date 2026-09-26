@@ -27,7 +27,9 @@ class MainActivity : Activity() {
     private lateinit var chatContainer: LinearLayout
     private lateinit var drawerLayout: LinearLayout
     private lateinit var mainContent: FrameLayout
+    private lateinit var borderView: OrionBorderSweepView
     private var isDrawerOpen = false
+    private var isRgbActive = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,7 +38,7 @@ class MainActivity : Activity() {
             setBackgroundColor(Color.parseColor("#050811"))
         }
 
-        val borderView = OrionBorderSweepView(this)
+        borderView = OrionBorderSweepView(this)
         root.addView(borderView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
         mainContent = FrameLayout(this).apply {
@@ -48,7 +50,7 @@ class MainActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT)
         }
 
-        // Top App Bar
+        // Top Navigation Bar
         val topBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(30, 45, 30, 20)
@@ -61,13 +63,13 @@ class MainActivity : Activity() {
             setTextColor(Color.parseColor("#00E5FF"))
             textSize = 28f
             typeface = Typeface.DEFAULT_BOLD
-            setPadding(10, 0, 30, 0)
+            setPadding(10, 0, 20, 0)
             setOnClickListener { toggleDrawer() }
         }
         topBar.addView(btnMenu)
 
         val tvTitle = TextView(this).apply {
-            text = "ORION SENTINEL // V1"
+            text = "ORION SENTINEL"
             setTextColor(Color.WHITE)
             textSize = 16f
             typeface = Typeface.DEFAULT_BOLD
@@ -75,12 +77,34 @@ class MainActivity : Activity() {
         }
         topBar.addView(tvTitle)
 
+        val btnRgbToggle = TextView(this).apply {
+            text = "🌈 RGB"
+            setTextColor(Color.parseColor("#00E5FF"))
+            textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(16, 8, 16, 8)
+            background = GradientDrawable().apply {
+                cornerRadius = 14f
+                setColor(Color.parseColor("#142236"))
+                setStroke(2, Color.parseColor("#00E5FF"))
+            }
+            setOnClickListener {
+                isRgbActive = !isRgbActive
+                borderView.visibility = if (isRgbActive) View.VISIBLE else View.GONE
+                Toast.makeText(this@MainActivity, "RGB Border: " + if (isRgbActive) "ON" else "OFF", Toast.LENGTH_SHORT).show()
+            }
+        }
+        topBar.addView(btnRgbToggle)
+
         val btnKeyConfig = TextView(this).apply {
             text = "🔑 KEYS"
             setTextColor(Color.parseColor("#76FF03"))
-            textSize = 14f
+            textSize = 12f
             typeface = Typeface.DEFAULT_BOLD
-            setPadding(20, 10, 20, 10)
+            setPadding(16, 8, 16, 8)
+            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            lp.setMargins(15, 0, 0, 0)
+            layoutParams = lp
             background = GradientDrawable().apply {
                 cornerRadius = 14f
                 setColor(Color.parseColor("#142236"))
@@ -94,8 +118,6 @@ class MainActivity : Activity() {
         val viewPagerArea = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
         }
-
-        // 1. HOME TAB
         homeLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
@@ -137,7 +159,7 @@ class MainActivity : Activity() {
         homeLayout.addView(orb)
 
         val btnFloat = Button(this).apply {
-            text = "🚀 LAUNCH FLOATING ORION ORB"
+            text = "🚀 LAUNCH FLOATING LIQUID ORB"
             setTextColor(Color.BLACK)
             textSize = 14f
             typeface = Typeface.DEFAULT_BOLD
@@ -159,7 +181,6 @@ class MainActivity : Activity() {
         homeLayout.addView(btnFloat)
         viewPagerArea.addView(homeLayout)
 
-        // 2. CHAT TAB
         chatLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             visibility = View.GONE
@@ -182,7 +203,6 @@ class MainActivity : Activity() {
 
         baseLinear.addView(viewPagerArea)
 
-        // Bottom Navigation Bar
         val bottomBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(20, 18, 20, 18)
@@ -242,57 +262,43 @@ class MainActivity : Activity() {
         }
         drawerContent.addView(tvDrawerHead)
 
-        // 1. Microphone
         val micGranted = ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         addPermissionCard(drawerContent, "Microphone (RECORD_AUDIO)", "Wake-word 'Orion' aur voice reply engine ke liye.", micGranted) {
             ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.RECORD_AUDIO), 101)
         }
 
-        // 2. Camera
         val camGranted = ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
         addPermissionCard(drawerContent, "Camera (CAMERA)", "Intruder photo capture aur security lock ke liye.", camGranted) {
             ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.CAMERA), 102)
         }
 
-        // 3. Phone Call State
         val callGranted = ContextCompat.checkSelfPermission(this, android.Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
         addPermissionCard(drawerContent, "Phone Call State (CALL & STATE)", "Scam call screening aur auto-dial ke liye.", callGranted) {
             ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.CALL_PHONE, android.Manifest.permission.READ_PHONE_STATE), 103)
         }
 
-        // 4. SMS Access
         val smsGranted = ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
         addPermissionCard(drawerContent, "SMS Access (READ & RECEIVE)", "OTP read, fraud check aur voice reply ke liye.", smsGranted) {
             ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.READ_SMS, android.Manifest.permission.RECEIVE_SMS), 104)
         }
 
-        // 5. Contacts
         val conGranted = ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
         addPermissionCard(drawerContent, "Contacts (READ_CONTACTS)", "True caller name pehchanne aur reminders ke liye.", conGranted) {
             ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.READ_CONTACTS, android.Manifest.permission.WRITE_CONTACTS), 105)
         }
 
-        // 6. Location
         val locGranted = ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         addPermissionCard(drawerContent, "Location (FINE & COARSE)", "Emergency location share aur navigation help ke liye.", locGranted) {
             ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION), 106)
         }
 
-        // 7. Notification Access
-        val notifGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-        } else true
-        addPermissionCard(drawerContent, "Notification Access", "VIP/WhatsApp & App summaries detect karne ke liye.", notifGranted) {
-            try {
-                startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-            } catch (_: Exception) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 107)
-                }
-            }
+        // Notification Listener Settings check
+        val flat = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
+        val notifServiceGranted = flat != null && flat.contains(packageName)
+        addPermissionCard(drawerContent, "Notification Access", "VIP/WhatsApp & App summaries detect karne ke liye.", notifServiceGranted) {
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
         }
 
-        // 8. Floating Bubble
         val bubbleGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(this) else true
         addPermissionCard(drawerContent, "Floating Bubble (Draw Over Apps)", "Screen ke upar floating glowing orb dikhane ke liye.", bubbleGranted) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -300,20 +306,17 @@ class MainActivity : Activity() {
             }
         }
 
-        // 9. Battery Optimization
         addPermissionCard(drawerContent, "Battery Optimization Exemption", "Background me service kill na ho isliye exemption.", true) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
             }
         }
 
-        // 10. Calendar Access
         val calGranted = ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
         addPermissionCard(drawerContent, "Calendar Access", "Daily events read aur schedule auto-booking ke liye.", calGranted) {
             ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.READ_CALENDAR, android.Manifest.permission.WRITE_CALENDAR), 108)
         }
 
-        // Kill Switch Button
         val btnKill = Button(this).apply {
             text = "🔴 EMERGENCY KILL SWITCH (STOP ALL)"
             setTextColor(Color.WHITE)
