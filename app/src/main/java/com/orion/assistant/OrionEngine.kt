@@ -192,6 +192,61 @@ class OrionEngine(
         return "DEBUG_ERROR: $lastDiagnosticError"
     }
 
+    
+    private fun executeAction(rawText: String) {
+        val lower = rawText.lowercase(java.util.Locale.ROOT)
+        if (lower.contains("[action:play_youtube]")) {
+            val q = extractParam(rawText, "play_youtube")
+            try {
+                val intent = android.content.Intent(android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).apply {
+                    putExtra(android.app.SearchManager.QUERY, q)
+                    setPackage("com.google.android.youtube")
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            } catch (_: Exception) {
+                val web = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.youtube.com/results?search_query=" + java.net.URLEncoder.encode(q, "UTF-8"))).apply {
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(web)
+            }
+        } else if (lower.contains("[action:open_whatsapp]")) {
+            launchApp("com.whatsapp")
+        } else if (lower.contains("[action:open_camera]")) {
+            val intent = android.content.Intent("android.media.action.IMAGE_CAPTURE").apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }
+            context.startActivity(intent)
+        } else if (lower.contains("[action:torch_on]")) {
+            setTorch(true)
+        } else if (lower.contains("[action:torch_off]")) {
+            setTorch(false)
+        } else if (lower.contains("[action:volume_full]")) {
+            val am = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+            am.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC), android.media.AudioManager.FLAG_SHOW_UI)
+        }
+    }
+
+    private fun extractParam(text: String, tag: String): String {
+        return try {
+            val s = text.indexOf("[$tag:") + tag.length + 2
+            val e = text.indexOf("]", s)
+            if (s != -1 && e != -1) text.substring(s, e) else "trending song"
+        } catch (_: Exception) { "trending song" }
+    }
+
+    private fun launchApp(pkg: String) {
+        try {
+            val intent = context.packageManager.getLaunchIntentForPackage(pkg)?.apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }
+            if (intent != null) context.startActivity(intent)
+        } catch (_: Exception) {}
+    }
+
+    private fun setTorch(on: Boolean) {
+        try {
+            val cam = context.getSystemService(android.content.Context.CAMERA_SERVICE) as android.hardware.camera2.CameraManager
+            cam.setTorchMode(cam.cameraIdList[0], on)
+        } catch (_: Exception) {}
+    }
+
     fun speak(text: String) {
         val clean = text.replace(Regex("[*#_`~]"), "").trim()
         isSpeakingNow = true
