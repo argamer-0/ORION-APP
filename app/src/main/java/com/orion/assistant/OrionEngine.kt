@@ -2,6 +2,7 @@ package com.orion.assistant
 
 import android.content.Context
 import android.content.Intent
+import android.media.MediaPlayer
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -12,9 +13,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import java.io.OutputStreamWriter
+import java.io.*
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
@@ -27,6 +26,7 @@ class OrionEngine(
 
     private var speechRecognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
+    private var mediaPlayer: MediaPlayer? = null
     var isContinuousMode = false
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -35,14 +35,10 @@ class OrionEngine(
         tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {}
             override fun onDone(utteranceId: String?) {
-                if (isContinuousMode) {
-                    mainHandler.postDelayed({ startListening() }, 500)
-                }
+                if (isContinuousMode) mainHandler.postDelayed({ startListening() }, 500)
             }
             override fun onError(utteranceId: String?) {
-                if (isContinuousMode) {
-                    mainHandler.postDelayed({ startListening() }, 800)
-                }
+                if (isContinuousMode) mainHandler.postDelayed({ startListening() }, 800)
             }
         })
         initRecognizer()
@@ -56,7 +52,7 @@ class OrionEngine(
                     setRecognitionListener(this@OrionEngine)
                 }
             } catch (e: Exception) {
-                onStatus("STT Error: ${e.message}")
+                onStatus("STT Init Error: ${e.message}")
             }
         }
     }
@@ -64,9 +60,7 @@ class OrionEngine(
     fun startListening() {
         mainHandler.post {
             try {
-                if (speechRecognizer == null) {
-                    initRecognizer()
-                }
+                if (speechRecognizer == null) initRecognizer()
                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN")
@@ -87,6 +81,7 @@ class OrionEngine(
             try {
                 speechRecognizer?.stopListening()
                 tts?.stop()
+                mediaPlayer?.stop()
                 onStatus("STANDBY")
             } catch (_: Exception) {}
         }
@@ -120,9 +115,9 @@ class OrionEngine(
 
             if (answer.isEmpty()) {
                 answer = if (groqKey.isEmpty() && geminiKey.isEmpty()) {
-                    "Ankit boss, KEYS button par click karke Groq ya Gemini API key paste karein."
+                    "Ankit boss, KEYS button par click karke Groq aur ElevenLabs API key daal dijiye."
                 } else {
-                    "Internet connection check karein ya API key verify karein boss."
+                    "Internet connection check karein boss, response fetch nahi ho paya."
                 }
             }
 
@@ -140,9 +135,9 @@ class OrionEngine(
             conn.requestMethod = "POST"
             conn.setRequestProperty("Authorization", "Bearer $key")
             conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-            conn.setRequestProperty("User-Agent", "ORION-Agent/1.0")
-            conn.connectTimeout = 20000
-            conn.readTimeout = 20000
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0")
+            conn.connectTimeout = 15000
+            conn.readTimeout = 15000
             conn.doOutput = true
 
             val json = JSONObject().apply {
@@ -150,7 +145,7 @@ class OrionEngine(
                 put("messages", JSONArray().apply {
                     put(JSONObject().apply {
                         put("role", "system")
-                        put("content", "You are ORION, an ultra-advanced cybernetic AI created for Ankit. Respond in sharp, direct, respectful Hindi/Hinglish.")
+                        put("content", "You are ORION, a badass loyal male AI assistant created by Ankit. Speak in crisp, direct, respectful Hindi/Hinglish as a loyal brother and sentinel.")
                     })
                     put(JSONObject().apply {
                         put("role", "user")
@@ -159,10 +154,10 @@ class OrionEngine(
                 })
             }
 
-            val writer = OutputStreamWriter(conn.outputStream, "UTF-8")
-            writer.write(json.toString())
-            writer.flush()
-            writer.close()
+            val os = conn.outputStream
+            os.write(json.toString().toByteArray(Charsets.UTF_8))
+            os.flush()
+            os.close()
 
             if (conn.responseCode == 200) {
                 val reader = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8"))
@@ -179,9 +174,8 @@ class OrionEngine(
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-            conn.setRequestProperty("User-Agent", "ORION-Agent/1.0")
-            conn.connectTimeout = 20000
-            conn.readTimeout = 20000
+            conn.connectTimeout = 15000
+            conn.readTimeout = 15000
             conn.doOutput = true
 
             val json = JSONObject().apply {
@@ -194,10 +188,10 @@ class OrionEngine(
                 })
             }
 
-            val writer = OutputStreamWriter(conn.outputStream, "UTF-8")
-            writer.write(json.toString())
-            writer.flush()
-            writer.close()
+            val os = conn.outputStream
+            os.write(json.toString().toByteArray(Charsets.UTF_8))
+            os.flush()
+            os.close()
 
             if (conn.responseCode == 200) {
                 val reader = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8"))
@@ -209,15 +203,89 @@ class OrionEngine(
     }
 
     fun speak(text: String) {
+        val prefs = context.getSharedPreferences("orion_config", Context.MODE_PRIVATE)
+        val elevenKey = prefs.getString("elevenlabs_key", "")?.trim() ?: ""
+        val voiceId = prefs.getString("elevenlabs_voice_id", "pNInz6obpgDQGcFmaJgB")?.trim() ?: "pNInz6obpgDQGcFmaJgB"
+
+        if (elevenKey.isNotEmpty()) {
+            Thread {
+                val success = streamElevenLabsVoice(text, elevenKey, voiceId)
+                if (!success) {
+                    mainHandler.post { speakOfflineTts(text) }
+                }
+            }.start()
+        } else {
+            speakOfflineTts(text)
+        }
+    }
+
+    private fun streamElevenLabsVoice(text: String, apiKey: String, voiceId: String): Boolean {
+        return try {
+            val url = URL("https://api.elevenlabs.io/v1/text-to-speech/$voiceId")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("xi-api-key", apiKey)
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("Accept", "audio/mpeg")
+            conn.connectTimeout = 15000
+            conn.readTimeout = 20000
+            conn.doOutput = true
+
+            val json = JSONObject().apply {
+                put("text", text)
+                put("model_id", "eleven_multilingual_v2")
+                put("voice_settings", JSONObject().apply {
+                    put("stability", 0.5)
+                    put("similarity_boost", 0.85)
+                })
+            }
+
+            val os = conn.outputStream
+            os.write(json.toString().toByteArray(Charsets.UTF_8))
+            os.flush()
+            os.close()
+
+            if (conn.responseCode == 200) {
+                val tempMp3 = File.createTempFile("orion_voice", ".mp3", context.cacheDir)
+                val fos = FileOutputStream(tempMp3)
+                conn.inputStream.copyTo(fos)
+                fos.close()
+
+                mainHandler.post {
+                    try {
+                        mediaPlayer?.release()
+                        mediaPlayer = MediaPlayer().apply {
+                            setDataSource(tempMp3.absolutePath)
+                            prepare()
+                            start()
+                            setOnCompletionListener {
+                                tempMp3.delete()
+                                if (isContinuousMode) {
+                                    mainHandler.postDelayed({ startListening() }, 500)
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {
+                        speakOfflineTts(text)
+                    }
+                }
+                true
+            } else false
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun speakOfflineTts(text: String) {
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "Orion_${System.currentTimeMillis()}")
     }
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             tts?.language = Locale("hi", "IN")
-            // Male Heavy Robotic Tone
-            tts?.setPitch(0.70f)
-            tts?.setSpeechRate(1.0f)
+            // Deep Robotic Male Pitch
+            tts?.setPitch(0.65f)
+            tts?.setSpeechRate(0.95f)
         }
     }
 
@@ -240,5 +308,6 @@ class OrionEngine(
         speechRecognizer?.destroy()
         tts?.stop()
         tts?.shutdown()
+        mediaPlayer?.release()
     }
 }
