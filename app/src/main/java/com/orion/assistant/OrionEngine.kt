@@ -29,17 +29,26 @@ class OrionEngine(
     private var tts: TextToSpeech? = null
     private var mediaPlayer: MediaPlayer? = null
     var isContinuousMode = false
+    private var isSpeakingNow = false
     private val mainHandler = Handler(Looper.getMainLooper())
 
     init {
         tts = TextToSpeech(context, this)
         tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) {}
+            override fun onStart(utteranceId: String?) {
+                isSpeakingNow = true
+            }
             override fun onDone(utteranceId: String?) {
-                if (isContinuousMode) mainHandler.postDelayed({ startListening() }, 500)
+                isSpeakingNow = false
+                if (isContinuousMode) {
+                    mainHandler.postDelayed({ startListening() }, 600)
+                }
             }
             override fun onError(utteranceId: String?) {
-                if (isContinuousMode) mainHandler.postDelayed({ startListening() }, 800)
+                isSpeakingNow = false
+                if (isContinuousMode) {
+                    mainHandler.postDelayed({ startListening() }, 800)
+                }
             }
         })
         initRecognizer()
@@ -59,6 +68,7 @@ class OrionEngine(
     }
 
     fun startListening() {
+        if (isSpeakingNow) return
         mainHandler.post {
             try {
                 if (speechRecognizer == null) initRecognizer()
@@ -78,6 +88,7 @@ class OrionEngine(
 
     fun stopListening() {
         isContinuousMode = false
+        isSpeakingNow = false
         mainHandler.post {
             try {
                 speechRecognizer?.stopListening()
@@ -89,14 +100,15 @@ class OrionEngine(
     }
 
     override fun onResults(results: Bundle?) {
+        if (isSpeakingNow) return
         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
         val text = matches?.firstOrNull()?.trim() ?: ""
-        if (text.isNotEmpty()) {
+        if (text.isNotEmpty() && text.length > 1) {
             onMessage(text, true)
             onStatus("THINKING...")
             queryAI(text)
         } else if (isContinuousMode) {
-            startListening()
+            mainHandler.postDelayed({ startListening() }, 400)
         }
     }
 
@@ -108,22 +120,19 @@ class OrionEngine(
 
             var answer = ""
 
-            // 1. Try Groq (Llama-3.3)
             if (groqKey.isNotEmpty()) {
                 answer = callGroq(prompt, groqKey)
             }
 
-            // 2. Try Gemini Fallback agar Groq fail ho
             if (answer.isEmpty() && geminiKey.isNotEmpty()) {
                 answer = callGemini(prompt, geminiKey)
             }
 
-            // 3. Agar fir bhi empty rahe
             if (answer.isEmpty()) {
                 answer = if (groqKey.isEmpty() && geminiKey.isEmpty()) {
-                    "Ankit boss, KEYS button par click karke Groq ya Gemini API key daal dijiye."
+                    "Ankit boss, KEYS button par click karke Groq API key aur ElevenLabs key save kar lijiye."
                 } else {
-                    "Mera naam Orion hai boss. Main aapka personal AI sentinel hoon. Bataiye kya madad karun?"
+                    "Haan Ankit bhai, bataiye kya kaam karna hai, main sun raha hoon."
                 }
             }
 
@@ -134,7 +143,6 @@ class OrionEngine(
             }
         }.start()
     }
-
     private fun callGroq(prompt: String, key: String): String {
         return try {
             val url = URL("https://api.groq.com/openai/v1/chat/completions")
@@ -145,25 +153,27 @@ class OrionEngine(
                 setRequestProperty("Accept", "application/json")
                 setRequestProperty("User-Agent", "Mozilla/5.0")
                 connectTimeout = 12000
-                readTimeout = 12000
+                readTimeout = 15000
                 doOutput = true
                 doInput = true
             }
+
+            val systemInstruction = "Aapka naam ORION hai. Aap Ankit ke personal, smart aur loyal assistant ho. Ekdum natural, saaf, confident Hindi ya Hinglish me baat karo jaise ek mature dost ya right-hand man baat karta hai. Kisi robot ya sentinel jaisa faltu formality mat karo. Jo poocha jaye uska seedha, badiya aur emotion ke sath answer do. Totle ya ajeeb shabdon ka use bilkul mat karo."
 
             val body = JSONObject().apply {
                 put("model", "llama-3.3-70b-versatile")
                 put("messages", JSONArray().apply {
                     put(JSONObject().apply {
                         put("role", "system")
-                        put("content", "Aapka naam ORION hai. Aap Ankit ke sabse powerful aur loyal male AI assistant ho. Har sawal ka jawab Hindi ya Hinglish me smart, respectful aur direct do. Faltoo lamba bhashan mat do.")
+                        put("content", systemInstruction)
                     })
                     put(JSONObject().apply {
                         put("role", "user")
                         put("content", prompt)
                     })
                 })
-                put("temperature", 0.7)
-                put("max_tokens", 400)
+                put("temperature", 0.6)
+                put("max_tokens", 350)
             }
 
             OutputStreamWriter(conn.outputStream, "UTF-8").use {
@@ -171,23 +181,15 @@ class OrionEngine(
                 it.flush()
             }
 
-            val responseCode = conn.responseCode
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                val responseText = conn.inputStream.bufferedReader().use { it.readText() }
-                val rootJson = JSONObject(responseText)
-                rootJson.getJSONArray("choices")
+            if (conn.responseCode == HttpURLConnection.HTTP_OK) {
+                val res = conn.inputStream.bufferedReader().use { it.readText() }
+                JSONObject(res).getJSONArray("choices")
                     .getJSONObject(0)
                     .getJSONObject("message")
                     .getString("content")
                     .trim()
-            } else {
-                Log.e("ORION_GROQ", "Error code: $responseCode")
-                ""
-            }
-        } catch (e: Exception) {
-            Log.e("ORION_GROQ", "Exception: ${e.message}")
-            ""
-        }
+            } else ""
+        } catch (_: Exception) { "" }
     }
 
     private fun callGemini(prompt: String, key: String): String {
@@ -197,7 +199,7 @@ class OrionEngine(
                 requestMethod = "POST"
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
                 connectTimeout = 12000
-                readTimeout = 12000
+                readTimeout = 15000
                 doOutput = true
                 doInput = true
             }
@@ -206,7 +208,7 @@ class OrionEngine(
                 put("contents", JSONArray().apply {
                     put(JSONObject().apply {
                         put("parts", JSONArray().apply {
-                            put(JSONObject().apply { put("text", prompt) })
+                            put(JSONObject().apply { put("text", "You are Orion, loyal assistant to Ankit. Answer in clean Hindi naturally: $prompt") })
                         })
                     })
                 })
@@ -218,9 +220,8 @@ class OrionEngine(
             }
 
             if (conn.responseCode == 200) {
-                val responseText = conn.inputStream.bufferedReader().use { it.readText() }
-                JSONObject(responseText)
-                    .getJSONArray("candidates")
+                val res = conn.inputStream.bufferedReader().use { it.readText() }
+                JSONObject(res).getJSONArray("candidates")
                     .getJSONObject(0)
                     .getJSONObject("content")
                     .getJSONArray("parts")
@@ -228,26 +229,28 @@ class OrionEngine(
                     .getString("text")
                     .trim()
             } else ""
-        } catch (e: Exception) {
-            Log.e("ORION_GEMINI", "Exception: ${e.message}")
-            ""
-        }
+        } catch (_: Exception) { "" }
     }
 
     fun speak(text: String) {
+        // Text clean karo taaki ElevenLabs atke nahi
+        val cleanText = text.replace(Regex("[*#_`~]"), "").trim()
         val prefs = context.getSharedPreferences("orion_config", Context.MODE_PRIVATE)
         val elevenKey = prefs.getString("elevenlabs_key", "")?.trim() ?: ""
         val voiceId = prefs.getString("elevenlabs_voice_id", "pNInz6obpgDQGcFmaJgB")?.trim() ?: "pNInz6obpgDQGcFmaJgB"
 
+        isSpeakingNow = true
+        speechRecognizer?.stopListening()
+
         if (elevenKey.isNotEmpty()) {
             Thread {
-                val success = streamElevenLabsVoice(text, elevenKey, voiceId)
+                val success = streamElevenLabsVoice(cleanText, elevenKey, voiceId)
                 if (!success) {
-                    mainHandler.post { speakOfflineTts(text) }
+                    mainHandler.post { speakOfflineTts(cleanText) }
                 }
             }.start()
         } else {
-            speakOfflineTts(text)
+            speakOfflineTts(cleanText)
         }
     }
 
@@ -268,8 +271,10 @@ class OrionEngine(
                 put("text", text)
                 put("model_id", "eleven_multilingual_v2")
                 put("voice_settings", JSONObject().apply {
-                    put("stability", 0.5)
+                    put("stability", 0.40)
                     put("similarity_boost", 0.85)
+                    put("style", 0.30)
+                    put("use_speaker_boost", true)
                 })
             }
 
@@ -293,6 +298,7 @@ class OrionEngine(
                             start()
                             setOnCompletionListener {
                                 tempMp3.delete()
+                                isSpeakingNow = false
                                 onStatus("STANDBY")
                                 if (isContinuousMode) {
                                     mainHandler.postDelayed({ startListening() }, 500)
@@ -300,14 +306,17 @@ class OrionEngine(
                             }
                         }
                     } catch (_: Exception) {
+                        isSpeakingNow = false
                         speakOfflineTts(text)
                     }
                 }
                 true
             } else {
+                isSpeakingNow = false
                 false
             }
         } catch (e: Exception) {
+            isSpeakingNow = false
             false
         }
     }
@@ -319,13 +328,13 @@ class OrionEngine(
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             tts?.language = Locale("hi", "IN")
-            tts?.setPitch(0.65f)
+            tts?.setPitch(0.70f)
             tts?.setSpeechRate(0.95f)
         }
     }
 
     override fun onError(error: Int) {
-        if (isContinuousMode) {
+        if (isContinuousMode && !isSpeakingNow) {
             mainHandler.postDelayed({ startListening() }, 1000)
         }
     }
@@ -340,6 +349,7 @@ class OrionEngine(
 
     fun destroy() {
         isContinuousMode = false
+        isSpeakingNow = false
         speechRecognizer?.destroy()
         tts?.stop()
         tts?.shutdown()
