@@ -5,7 +5,6 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
 class OrionAutomationService : AccessibilityService() {
-
     companion object {
         var instance: OrionAutomationService? = null
         var shouldAutoSendWhatsApp = false
@@ -18,17 +17,17 @@ class OrionAutomationService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
-        val rootNode = rootInActiveWindow ?: return
+        val root = rootInActiveWindow ?: return
 
         if (shouldAutoSendWhatsApp && event.packageName == "com.whatsapp") {
-            val sendNodes = rootNode.findAccessibilityNodeInfosByViewId("com.whatsapp:id/send")
-            if (!sendNodes.isNullOrEmpty()) {
-                sendNodes[0].performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            val sendBtns = root.findAccessibilityNodeInfosByViewId("com.whatsapp:id/send")
+            if (!sendBtns.isNullOrEmpty()) {
+                sendBtns[0].performAction(AccessibilityNodeInfo.ACTION_CLICK)
                 shouldAutoSendWhatsApp = false
             } else {
-                val sendDesc = rootNode.findAccessibilityNodeInfosByText("Send")
-                if (!sendDesc.isNullOrEmpty()) {
-                    sendDesc[0].performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                val textBtns = root.findAccessibilityNodeInfosByText("Send")
+                if (!textBtns.isNullOrEmpty()) {
+                    textBtns[0].performAction(AccessibilityNodeInfo.ACTION_CLICK)
                     shouldAutoSendWhatsApp = false
                 }
             }
@@ -36,7 +35,6 @@ class OrionAutomationService : AccessibilityService() {
     }
 
     override fun onInterrupt() {}
-
     override fun onDestroy() {
         super.onDestroy()
         instance = null

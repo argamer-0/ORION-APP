@@ -24,19 +24,13 @@ class OrionArcOrbView(context: Context) : View(context) {
         strokeCap = Paint.Cap.ROUND
         color = Color.parseColor("#76FF03")
     }
-    private val arcWhite = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = 8f
-        strokeCap = Paint.Cap.ROUND
-        color = Color.WHITE
-    }
     private val corePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         color = Color.parseColor("#080D1A")
     }
     private val watermarkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#1500E5FF")
-        textSize = 72f
+        textSize = 68f
         textAlign = Paint.Align.CENTER
         typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
     }
@@ -45,7 +39,7 @@ class OrionArcOrbView(context: Context) : View(context) {
         textSize = 34f
         textAlign = Paint.Align.CENTER
         typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-        letterSpacing = 0.25f
+        letterSpacing = 0.2f
     }
     private val subTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#00E5FF")
@@ -78,21 +72,15 @@ class OrionArcOrbView(context: Context) : View(context) {
         val radius = (Math.min(width, height) / 2f) - 25f
         if (radius <= 0) return
 
-        // 1. Watermark background text
         canvas.drawText("O R I O N", cx, cy + 25f, watermarkPaint)
-
-        // 2. Core inner ring
         canvas.drawCircle(cx, cy, radius - 16f, corePaint)
         canvas.drawCircle(cx, cy, radius, ringPaint)
 
-        // 3. Maya style rotating orbital arcs
         rect.set(cx - radius, cy - radius, cx + radius, cy + radius)
         canvas.drawArc(rect, rotationAngle, 110f, false, arcCyan)
         canvas.drawArc(rect, rotationAngle + 180f, 80f, false, arcGreen)
-        canvas.drawArc(rect, -rotationAngle * 1.5f, 50f, false, arcWhite)
 
-        // 4. Center Titles
         canvas.drawText("O · R · I · O · N", cx, cy + 2f, textPaint)
-        canvas.drawText("AI SENTINEL // ACTIVE", cx, cy + 34f, subTextPaint)
+        canvas.drawText("GEMINI AI // ACTIVE", cx, cy + 34f, subTextPaint)
     }
 }

@@ -70,7 +70,6 @@ class FloatingBubbleService : Service() {
 
             rect.set(cx - radius, cy - radius, cx + radius, cy + radius)
             canvas.drawArc(rect, angle, 90f, false, arcPaint)
-
             canvas.drawText("O.R.I.O.N", cx, cy + 10f, textPaint)
         }
     }

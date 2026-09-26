@@ -27,9 +27,7 @@ class MainActivity : Activity() {
     private lateinit var chatContainer: LinearLayout
     private lateinit var drawerLayout: LinearLayout
     private lateinit var mainContent: FrameLayout
-    private lateinit var borderView: OrionBorderSweepView
     private var isDrawerOpen = false
-    private var isRgbActive = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,9 +35,6 @@ class MainActivity : Activity() {
         val root = FrameLayout(this).apply {
             setBackgroundColor(Color.parseColor("#050811"))
         }
-
-        borderView = OrionBorderSweepView(this)
-        root.addView(borderView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
         mainContent = FrameLayout(this).apply {
             layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
@@ -50,7 +45,6 @@ class MainActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT)
         }
 
-        // Top Navigation Bar
         val topBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(30, 45, 30, 20)
@@ -69,7 +63,7 @@ class MainActivity : Activity() {
         topBar.addView(btnMenu)
 
         val tvTitle = TextView(this).apply {
-            text = "ORION SENTINEL"
+            text = "ORION // GEMINI AI"
             setTextColor(Color.WHITE)
             textSize = 16f
             typeface = Typeface.DEFAULT_BOLD
@@ -77,40 +71,18 @@ class MainActivity : Activity() {
         }
         topBar.addView(tvTitle)
 
-        val btnRgbToggle = TextView(this).apply {
-            text = "🌈 RGB"
-            setTextColor(Color.parseColor("#00E5FF"))
-            textSize = 12f
-            typeface = Typeface.DEFAULT_BOLD
-            setPadding(16, 8, 16, 8)
-            background = GradientDrawable().apply {
-                cornerRadius = 14f
-                setColor(Color.parseColor("#142236"))
-                setStroke(2, Color.parseColor("#00E5FF"))
-            }
-            setOnClickListener {
-                isRgbActive = !isRgbActive
-                borderView.visibility = if (isRgbActive) View.VISIBLE else View.GONE
-                Toast.makeText(this@MainActivity, "RGB Border: " + if (isRgbActive) "ON" else "OFF", Toast.LENGTH_SHORT).show()
-            }
-        }
-        topBar.addView(btnRgbToggle)
-
         val btnKeyConfig = TextView(this).apply {
             text = "🔑 KEYS"
             setTextColor(Color.parseColor("#76FF03"))
             textSize = 12f
             typeface = Typeface.DEFAULT_BOLD
-            setPadding(16, 8, 16, 8)
-            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            lp.setMargins(15, 0, 0, 0)
-            layoutParams = lp
+            setPadding(20, 10, 20, 10)
             background = GradientDrawable().apply {
                 cornerRadius = 14f
                 setColor(Color.parseColor("#142236"))
                 setStroke(2, Color.parseColor("#76FF03"))
             }
-            setOnClickListener { showAllKeysDialog() }
+            setOnClickListener { showGeminiKeyDialog() }
         }
         topBar.addView(btnKeyConfig)
         baseLinear.addView(topBar)
@@ -119,7 +91,6 @@ class MainActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
         }
 
-        // HOME TAB
         homeLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
@@ -128,7 +99,7 @@ class MainActivity : Activity() {
         }
 
         tvStatus = TextView(this).apply {
-            text = "STATUS: STANDBY (TAP ORB FOR CONTINUOUS AI)"
+            text = "STATUS: STANDBY (TAP ORB TO START)"
             setTextColor(Color.parseColor("#76FF03"))
             textSize = 13f
             typeface = Typeface.MONOSPACE
@@ -138,10 +109,10 @@ class MainActivity : Activity() {
         homeLayout.addView(tvStatus)
 
         val orb = OrionArcOrbView(this).apply {
-            val size = (230 * resources.displayMetrics.density).toInt()
+            val size = (240 * resources.displayMetrics.density).toInt()
             layoutParams = LinearLayout.LayoutParams(size, size).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
-                setMargins(0, 5, 0, 20)
+                setMargins(0, 10, 0, 25)
             }
             isClickable = true
             setOnClickListener {
@@ -183,7 +154,6 @@ class MainActivity : Activity() {
         homeLayout.addView(btnFloat)
         viewPagerArea.addView(homeLayout)
 
-        // CHAT TAB
         chatLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             visibility = View.GONE
@@ -266,57 +236,56 @@ class MainActivity : Activity() {
         drawerContent.addView(tvDrawerHead)
 
         val micGranted = ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-        addPermissionCard(drawerContent, "Microphone (RECORD_AUDIO)", "Wake-word 'Orion' aur continuous AI speech ke liye.", micGranted) {
+        addPermissionCard(drawerContent, "Microphone (RECORD_AUDIO)", "Continuous AI Speech Loop ke liye.", micGranted) {
             ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.RECORD_AUDIO), 101)
         }
 
         val camGranted = ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-        addPermissionCard(drawerContent, "Camera (CAMERA)", "Intruder photo capture aur security lens ke liye.", camGranted) {
+        addPermissionCard(drawerContent, "Camera (CAMERA)", "Intruder security aur photos ke liye.", camGranted) {
             ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.CAMERA), 102)
         }
 
         val callGranted = ContextCompat.checkSelfPermission(this, android.Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
-        addPermissionCard(drawerContent, "Phone Call State (CALL & STATE)", "Emergency auto-dial aur scam screening ke liye.", callGranted) {
+        addPermissionCard(drawerContent, "Phone Call State (CALL & STATE)", "Emergency auto-dial aur scam protection.", callGranted) {
             ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.CALL_PHONE, android.Manifest.permission.READ_PHONE_STATE), 103)
         }
 
         val smsGranted = ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
-        addPermissionCard(drawerContent, "SMS Access (READ & RECEIVE)", "OTP read, fraud check aur auto reply ke liye.", smsGranted) {
-            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.READ_SMS, android.Manifest.permission.RECEIVE_SMS), 104)
+        addPermissionCard(drawerContent, "SMS Access (READ & RECEIVE)", "OTP read, fraud check aur reply ke liye.", smsGranted) {
+            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.READ_SMS, android.Manifest.permission.RECEIVE_SMS, android.Manifest.permission.SEND_SMS), 104)
         }
 
         val conGranted = ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
-        addPermissionCard(drawerContent, "Contacts (READ_CONTACTS)", "True caller name pehchanne aur reminders ke liye.", conGranted) {
+        addPermissionCard(drawerContent, "Contacts (READ_CONTACTS)", "WhatsApp & call auto contacts find karne ke liye.", conGranted) {
             ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.READ_CONTACTS, android.Manifest.permission.WRITE_CONTACTS), 105)
         }
 
         val locGranted = ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        addPermissionCard(drawerContent, "Location (FINE & COARSE)", "Emergency location share aur navigation help ke liye.", locGranted) {
+        addPermissionCard(drawerContent, "Location (FINE & COARSE)", "Real-time navigation alerts ke liye.", locGranted) {
             ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION), 106)
         }
 
         val flat = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
-        val notifServiceGranted = flat != null && flat.contains(packageName)
-        addPermissionCard(drawerContent, "Notification Access", "VIP/WhatsApp & App summaries auto catch ke liye.", notifServiceGranted) {
+        val notifGranted = flat != null && flat.contains(packageName)
+        addPermissionCard(drawerContent, "Notification Access", "VIP/WhatsApp message padhne ke liye.", notifGranted) {
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
         }
 
         val bubbleGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(this) else true
-        addPermissionCard(drawerContent, "Floating Bubble (Draw Over Apps)", "Screen ke upar floating liquid orb dikhane ke liye.", bubbleGranted) {
+        addPermissionCard(drawerContent, "Floating Bubble (Draw Over Apps)", "Liquid Glass orb dikhane ke liye.", bubbleGranted) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
             }
         }
 
-        addPermissionCard(drawerContent, "Battery Optimization Exemption", "Background me AI service kill na ho isliye.", true) {
+        addPermissionCard(drawerContent, "Accessibility Service (God Mode)", "WhatsApp par auto message send karne ke liye.", true) {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+
+        addPermissionCard(drawerContent, "Battery Optimization Exemption", "Background me service hamesha chalne ke liye.", true) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
             }
-        }
-
-        val calGranted = ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
-        addPermissionCard(drawerContent, "Calendar Access", "Daily events read aur schedule auto-booking ke liye.", calGranted) {
-            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.READ_CALENDAR, android.Manifest.permission.WRITE_CALENDAR), 108)
         }
 
         val btnKill = Button(this).apply {
@@ -347,12 +316,8 @@ class MainActivity : Activity() {
 
         engine = OrionEngine(
             this,
-            onStatus = { status ->
-                runOnUiThread { tvStatus.text = status }
-            },
-            onMessage = { msg, isUser ->
-                runOnUiThread { addChatMessage(msg, isUser) }
-            }
+            onStatus = { status -> runOnUiThread { tvStatus.text = status } },
+            onMessage = { msg, isUser -> runOnUiThread { addChatMessage(msg, isUser) } }
         )
 
         if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -430,56 +395,48 @@ class MainActivity : Activity() {
         chatScroll.post { chatScroll.fullScroll(View.FOCUS_DOWN) }
     }
 
-    private fun showAllKeysDialog() {
+    private fun showGeminiKeyDialog() {
         val prefs = getSharedPreferences("orion_config", Context.MODE_PRIVATE)
-        val curGroq = prefs.getString("groq_key", "") ?: ""
-        val curEleven = prefs.getString("elevenlabs_key", "") ?: ""
-        val curVoiceId = prefs.getString("elevenlabs_voice_id", "pNInz6obpgDQGcFmaJgB") ?: "pNInz6obpgDQGcFmaJgB"
         val curGemini = prefs.getString("gemini_key", "") ?: ""
+        val curEleven = prefs.getString("elevenlabs_key", "") ?: ""
+        val curVoiceId = prefs.getString("elevenlabs_voice_id", "EXAVITQu4vr4xnSDxMaL") ?: "EXAVITQu4vr4xnSDxMaL"
 
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(50, 40, 50, 20)
         }
 
-        val etGroq = EditText(this).apply {
-            hint = "Groq Key (gsk_...)"
-            setText(curGroq)
+        val etGemini = EditText(this).apply {
+            hint = "Google Gemini API Key (AIzaSy...)"
+            setText(curGemini)
         }
         val etEleven = EditText(this).apply {
             hint = "ElevenLabs API Key"
             setText(curEleven)
         }
         val etVoiceId = EditText(this).apply {
-            hint = "Voice ID (Default: Adam Male)"
+            hint = "Voice ID (Default: Bella Sweet Female)"
             setText(curVoiceId)
         }
-        val etGemini = EditText(this).apply {
-            hint = "Gemini Key (AIzaSy...)"
-            setText(curGemini)
-        }
 
-        layout.addView(TextView(this).apply { text = "1. Groq Llama-3.3 Key (Brain):"; textSize = 12f; setTextColor(Color.GRAY) })
-        layout.addView(etGroq)
-        layout.addView(TextView(this).apply { text = "\n2. ElevenLabs API Key (Ultra Male Voice):"; textSize = 12f; setTextColor(Color.CYAN) })
-        layout.addView(etEleven)
-        layout.addView(TextView(this).apply { text = "Voice ID (pNInz6obpgDQGcFmaJgB = Adam Deep Male):"; textSize = 11f; setTextColor(Color.GRAY) })
-        layout.addView(etVoiceId)
-        layout.addView(TextView(this).apply { text = "\n3. Gemini Fallback Key:"; textSize = 12f; setTextColor(Color.GRAY) })
+        layout.addView(TextView(this).apply { text = "1. Google Gemini API Key (Smart Brain):"; textSize = 12f; setTextColor(Color.CYAN) })
         layout.addView(etGemini)
+        layout.addView(TextView(this).apply { text = "\n2. ElevenLabs Key (Sweet Female Voice):"; textSize = 12f; setTextColor(Color.GREEN) })
+        layout.addView(etEleven)
+        layout.addView(TextView(this).apply { text = "Voice ID (EXAVITQu4vr4xnSDxMaL = Bella Hindi):"; textSize = 11f; setTextColor(Color.GRAY) })
+        layout.addView(etVoiceId)
 
         AlertDialog.Builder(this)
-            .setTitle("AI Engine & Voice Keys")
+            .setTitle("ORION AI & Voice Setup")
             .setView(layout)
-            .setPositiveButton("Save All") { _, _ ->
+            .setPositiveButton("Save Config") { _, _ ->
                 prefs.edit()
-                    .putString("groq_key", etGroq.text.toString().trim())
+                    .putString("gemini_key", etGemini.text.toString().trim())
                     .putString("elevenlabs_key", etEleven.text.toString().trim())
                     .putString("elevenlabs_voice_id", etVoiceId.text.toString().trim())
-                    .putString("gemini_key", etGemini.text.toString().trim())
                     .apply()
-                Toast.makeText(this, "Keys & Voice Saved Successfully!", Toast.LENGTH_SHORT).show()
-                engine?.speak("Namaste Ankit boss. Orion ab ElevenLabs real male voice ke sath tayar hai.")
+                Toast.makeText(this, "Gemini & Female Voice Saved!", Toast.LENGTH_SHORT).show()
+                engine?.speak("Haan Ankit! Ab main poori tarah tumhare sath tayar hoon, batao kya mast karna hai aaj?")
             }
             .setNegativeButton("Cancel", null)
             .show()
